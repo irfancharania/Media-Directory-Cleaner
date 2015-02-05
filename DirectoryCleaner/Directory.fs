@@ -54,6 +54,16 @@ let isLeafNode path =
     | Success(x, _) -> false
     | Failure _ -> true
 
+let deleteFolders (pathList : seq<string>) = 
+    pathList 
+    //|> Seq.iter (fun x -> Directory.Delete(x, true))
+    |> Seq.iter (fun x -> printfn "%s" x)
+
+let deleteFiles (pathList : seq<string>) = 
+    pathList 
+    //|> Seq.iter File.Delete
+    |> Seq.iter (fun x -> printfn "%s" x)
+
 //-------------------------------------------------------------------
 /// Movies
 (* 
@@ -71,6 +81,7 @@ Movies
 
 *)
 module Movies = 
+    [<Literal>]
     let thresholdFolderSize = 1L<MB>
     
     /// Get list of folders below size threshold size
@@ -90,6 +101,7 @@ module Movies =
         |> pathExists
         |> bindR getTopDirectoriesList
         |> bindR filterDirectoriesBySize
+        |> successTee (fun (x, _) -> deleteFolders x)
 
 //-------------------------------------------------------------------
 /// TV
@@ -116,6 +128,7 @@ TV Shows
 
 *)
 module TV = 
+    [<Literal>]
     let thresholdFileSize = 1L<MB>
     
     /// Get list of folders that are leaf nodes
