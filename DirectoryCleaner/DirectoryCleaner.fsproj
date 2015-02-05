@@ -52,6 +52,7 @@
     <Compile Include="Utility.fs" />
     <Compile Include="ROP.fs" />
     <Compile Include="Size.fs" />
+    <Compile Include="Logging.fs" />
     <Compile Include="Directory.fs" />
     <Compile Include="Program.fs" />
     <None Include="App.config" />

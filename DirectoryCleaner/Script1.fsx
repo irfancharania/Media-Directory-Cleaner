@@ -11,8 +11,8 @@ open Size
 open Directory
 
 let test = "D:\Temp\New folder"
-let t = TV.filePathsToDelete test
-let m = Movies.folderPathsToDelete test
+let t = TV.cleanDirectory test
+let m = Movies.cleanDirectory test
 
 let a l =
     match l with
@@ -20,7 +20,8 @@ let a l =
     | _ -> Seq.empty
 
 sprintf "\nm\n"
-a m |> Seq.iter (fun x -> Console.WriteLine(sprintf "%s" x))
+a m |> Seq.toList
+    |> Seq.iter (fun x -> Console.WriteLine(sprintf "%s" x))
 sprintf "\nt\n"
 a t |> Seq.toList
     |> Seq.iter (fun x -> Console.WriteLine(sprintf "%s" x))

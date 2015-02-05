@@ -54,52 +54,73 @@ let isLeafNode path =
     | Success(x, _) -> false
     | Failure _ -> true
 
-let deleteFolders (pathList : seq<string>) = 
-    pathList 
-    //|> Seq.iter (fun x -> Directory.Delete(x, true))
-    |> Seq.iter (fun x -> printfn "%s" x)
+/// Get list of folders that are leaf nodes
+let filterDirectoriesByLeafNodes (listDirectories : Collections.Generic.IEnumerable<DirectoryInfo>) = 
+    let filtered = 
+        listDirectories
+        |> Seq.filter (fun x -> isLeafNode x.FullName)
+        |> Seq.map (fun x -> x.FullName)
+    if Seq.isEmpty filtered then fail NoLeafNodesFound
+    else succeed filtered
 
+/// Print paths
+let printPathList (pathList : seq<string>) = pathList |> Seq.iter (fun x -> printfn "%s" x)
+
+/// Delete folders in list of paths
+let deleteFolders (pathList : seq<string>) = 
+    //pathList 
+    //|> Seq.iter (fun x -> Directory.Delete(x, true))
+    printPathList pathList
+
+/// Delete files in list of paths
 let deleteFiles (pathList : seq<string>) = 
-    pathList 
+    //pathList 
     //|> Seq.iter File.Delete
-    |> Seq.iter (fun x -> printfn "%s" x)
+    printPathList pathList
 
 //-------------------------------------------------------------------
 /// Movies
 (* 
-If folder size below threshold, movie file may have been deleted.
-In this case, delete the folder.
+Folders with movie files will have size above threshold.
 
-Main movie files are expected to be 1 level deep.
+Main movie folder may contain set folders with subdirectories.
+Delete leaf directories below threshold.
+
+Any left over directories will become leaf directories for next run
+
 Expected folder structure:
 
 Movies
    |---- Some Movie (2015)
    |       |---- <ignore>
    |
-   |---- Some Movie2 (2015)
+   |---- Movie Set
+   |       |---- Another Movie 1 (2010)
+   |       |        |---- <ignore>
+   |       |
+   |       |---- Another Movie 2 (2011)
+
 
 *)
 module Movies = 
     [<Literal>]
-    let thresholdFolderSize = 1L<MB>
+    let thresholdFolderSize = 100L<MB>
     
     /// Get list of folders below size threshold size
-    let private filterDirectoriesBySize (listDirectories : Collections.Generic.IEnumerable<DirectoryInfo>) = 
+    let private filterDirectoriesBySize (listDirectories : seq<string>) = 
         let filtered = 
-            listDirectories
-            |> Seq.choose (fun x -> 
-                   let folderSize = getDirectorySize x.FullName
-                   if folderSize < thresholdFolderSize then Some(x)
-                   else None)
-            |> Seq.map (fun x -> x.FullName)
+            listDirectories |> Seq.choose (fun x -> 
+                                   let folderSize = getDirectorySize x
+                                   if folderSize < thresholdFolderSize then Some(x)
+                                   else None)
         if Seq.isEmpty filtered then fail SubdirectoriesBelowThresholdDoNotExist
         else succeed filtered
     
-    let folderPathsToDelete (path : string) = 
+    let cleanDirectory (path : string) = 
         path
         |> pathExists
-        |> bindR getTopDirectoriesList
+        |> bindR getAllDirectoriesList
+        |> bindR filterDirectoriesByLeafNodes
         |> bindR filterDirectoriesBySize
         |> successTee (fun (x, _) -> deleteFolders x)
 
@@ -129,16 +150,7 @@ TV Shows
 *)
 module TV = 
     [<Literal>]
-    let thresholdFileSize = 1L<MB>
-    
-    /// Get list of folders that are leaf nodes
-    let private filterDirectoriesByLeafNodes (listDirectories : Collections.Generic.IEnumerable<DirectoryInfo>) = 
-        let filtered = 
-            listDirectories
-            |> Seq.filter (fun x -> isLeafNode x.FullName)
-            |> Seq.map (fun x -> x.FullName)
-        if Seq.isEmpty filtered then fail NoLeafNodesFound
-        else succeed filtered
+    let thresholdFileSize = 100L<MB>
     
     /// Separate file list into two based on file size
     let private partitionFilesBySize (listFiles : Collections.Generic.IEnumerable<FileInfo>) = 
@@ -179,9 +191,10 @@ module TV =
         if (Seq.isEmpty orphans) then fail FilesNotFound
         else succeed orphans
     
-    let filePathsToDelete (path : string) = 
+    let cleanDirectory (path : string) = 
         path
         |> pathExists
         |> bindR getAllDirectoriesList
         |> bindR filterDirectoriesByLeafNodes
         |> bindR getSubDirectoryFiles
+        |> successTee (fun (x, _) -> deleteFiles x)
