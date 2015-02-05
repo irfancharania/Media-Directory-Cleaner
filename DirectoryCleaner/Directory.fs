@@ -10,8 +10,8 @@ let int64ToMB = Size.int64ToBytes >> Size.bytesToMegaBytes
 type FailureMessage = 
     | PathNameCannotBeEmpty
     | DirectoryNotFound
-    | NoLeafNodesFound
     | FilesNotFound
+    | NoLeafNodesFound
     | SubdirectoriesDoNotExist
     | SubdirectoriesBelowThresholdDoNotExist
 
@@ -39,19 +39,16 @@ let getTopDirectoriesList = getDirectoriesList SearchOption.TopDirectoryOnly
 let getAllDirectoriesList = getDirectoriesList SearchOption.AllDirectories
 
 /// Get list of files in directory
-let getFilesList path = 
-    let files = DirectoryInfo(path).EnumerateFiles("*", SearchOption.TopDirectoryOnly)
-    if Seq.isEmpty files then fail FilesNotFound
-    else succeed files
+let getFilesList path = DirectoryInfo(path).EnumerateFiles("*", SearchOption.TopDirectoryOnly)
 
 /// Get directory size based on top-level files only
 let getDirectorySize path = 
     let total (listFiles : Collections.Generic.IEnumerable<FileInfo>) = 
         let sum = listFiles |> Seq.sumBy (fun x -> x.Length)
-        succeed (sum |> int64ToMB)
+        sum |> int64ToMB
     path
     |> getFilesList
-    |> bindR total
+    |> total
 
 /// Does directory path contain subdirectories?
 let isLeafNode path = 
@@ -84,9 +81,8 @@ module Movies =
             listDirectories
             |> Seq.choose (fun x -> 
                    let folderSize = getDirectorySize x.FullName
-                   match folderSize with
-                   | Success(y, _) when y < thresholdFolderSize -> Some(x)
-                   | _ -> None)
+                   if folderSize < thresholdFolderSize then Some(x)
+                   else None)
             |> Seq.map (fun x -> x.FullName)
         if Seq.isEmpty filtered then fail SubdirectoriesBelowThresholdDoNotExist
         else succeed filtered
@@ -125,7 +121,10 @@ module TV =
     let thresholdFileSize = 1L<MB>
     
     let private filterDirectoriesByLeafNodes (listDirectories : Collections.Generic.IEnumerable<DirectoryInfo>) = 
-        let filtered = listDirectories |> Seq.filter (fun x -> isLeafNode x.FullName)
+        let filtered = 
+            listDirectories
+            |> Seq.filter (fun x -> isLeafNode x.FullName)
+            |> Seq.map (fun x -> x.FullName)
         if Seq.isEmpty filtered then fail NoLeafNodesFound
         else succeed filtered
     
@@ -134,7 +133,7 @@ module TV =
             listFiles |> Utility.partition (fun x -> 
                              let fileSize = x.Length |> int64ToMB
                              fileSize > thresholdFileSize)
-        succeed (mainFiles, extraFiles)
+        (mainFiles, extraFiles)
     
     let private getOrphanExtraFiles ((mainFiles : seq<FileInfo>), (extraFiles : seq<FileInfo>)) = 
         let hasCorrespondingMainFile extraFile = 
@@ -142,33 +141,32 @@ module TV =
             mainFiles |> Seq.exists (fun (x : FileInfo) -> x.Name.Contains(fileName))
         
         // skip checking if no main files found
-        let orphan = 
+        let orphans = 
             if Seq.isEmpty mainFiles then extraFiles |> Seq.map (fun x -> x.FullName)
             else 
                 extraFiles
                 |> Seq.filter (fun x -> hasCorrespondingMainFile x.Name)
                 |> Seq.map (fun x -> x.FullName)
         
-        if (Seq.isEmpty orphan) then fail FilesNotFound
-        else succeed orphan
+        orphans
     
-    let private getDirectoryFiles (path : string) = 
-        path
-        |> getFilesList
-        |> bindR partitionFilesBySize
-        |> bindR getOrphanExtraFiles
+    let private getSubDirectoryFiles (subdirectories : seq<string>) = 
+        let getOrphansPerDirectory = 
+            getFilesList
+            >> partitionFilesBySize
+            >> getOrphanExtraFiles
+        
+        let orphans = 
+            subdirectories
+            |> Seq.map getOrphansPerDirectory
+            |> Seq.concat
+        
+        if (Seq.isEmpty orphans) then fail FilesNotFound
+        else succeed orphans
     
-    let private getSubdirectories (path : string) = 
+    let filePathsToDelete (path : string) = 
         path
         |> pathExists
         |> bindR getAllDirectoriesList
         |> bindR filterDirectoriesByLeafNodes
-    
-    let filePathsToDelete (path : string) =
-        let directories = getDirectoryFiles path
-        
-        match directories with
-        | Failure errors -> fail errors
-        | Success (x, _) -> succeed x
-        
-        
+        |> bindR getSubDirectoryFiles
