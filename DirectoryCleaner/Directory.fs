@@ -42,13 +42,10 @@ let getAllDirectoriesList = getDirectoriesList SearchOption.AllDirectories
 let getFilesList path = DirectoryInfo(path).EnumerateFiles("*", SearchOption.TopDirectoryOnly)
 
 /// Get directory size based on top-level files only
-let getDirectorySize path = 
-    let total (listFiles : Collections.Generic.IEnumerable<FileInfo>) = 
-        let sum = listFiles |> Seq.sumBy (fun x -> x.Length)
-        sum |> int64ToMB
-    path
-    |> getFilesList
-    |> total
+let getDirectorySize = 
+    getFilesList
+    >> Seq.sumBy (fun x -> x.Length)
+    >> int64ToMB
 
 /// Does directory path contain subdirectories?
 let isLeafNode path = 
@@ -76,6 +73,7 @@ Movies
 module Movies = 
     let thresholdFolderSize = 1L<MB>
     
+    /// Get list of folders below size threshold size
     let private filterDirectoriesBySize (listDirectories : Collections.Generic.IEnumerable<DirectoryInfo>) = 
         let filtered = 
             listDirectories
@@ -120,6 +118,7 @@ TV Shows
 module TV = 
     let thresholdFileSize = 1L<MB>
     
+    /// Get list of folders that are leaf nodes
     let private filterDirectoriesByLeafNodes (listDirectories : Collections.Generic.IEnumerable<DirectoryInfo>) = 
         let filtered = 
             listDirectories
@@ -128,6 +127,7 @@ module TV =
         if Seq.isEmpty filtered then fail NoLeafNodesFound
         else succeed filtered
     
+    /// Separate file list into two based on file size
     let private partitionFilesBySize (listFiles : Collections.Generic.IEnumerable<FileInfo>) = 
         let mainFiles, extraFiles = 
             listFiles |> Utility.partition (fun x -> 
@@ -135,6 +135,7 @@ module TV =
                              fileSize > thresholdFileSize)
         (mainFiles, extraFiles)
     
+    /// Get list of extra files with no corresponding main file
     let private getOrphanExtraFiles ((mainFiles : seq<FileInfo>), (extraFiles : seq<FileInfo>)) = 
         let hasCorrespondingMainFile extraFile = 
             let fileName = Path.GetFileNameWithoutExtension extraFile
@@ -145,11 +146,12 @@ module TV =
             if Seq.isEmpty mainFiles then extraFiles |> Seq.map (fun x -> x.FullName)
             else 
                 extraFiles
-                |> Seq.filter (fun x -> hasCorrespondingMainFile x.Name)
+                |> Seq.filter (fun x -> not (hasCorrespondingMainFile x.Name))
                 |> Seq.map (fun x -> x.FullName)
         
         orphans
     
+    /// Get list of files from all subdirectories
     let private getSubDirectoryFiles (subdirectories : seq<string>) = 
         let getOrphansPerDirectory = 
             getFilesList
