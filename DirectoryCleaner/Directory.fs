@@ -162,16 +162,18 @@ module TV =
     
     /// Get list of extra files with no corresponding main file
     let private getOrphanExtraFiles ((mainFiles : seq<FileInfo>), (extraFiles : seq<FileInfo>)) = 
-        let hasCorrespondingMainFile extraFile = 
-            let fileName = Path.GetFileNameWithoutExtension extraFile
-            mainFiles |> Seq.exists (fun (x : FileInfo) -> x.Name.Contains(fileName))
+        let doesNotHaveCorrespondingMainFile (extraFile : FileInfo) = 
+            let getFileName = Path.GetFileNameWithoutExtension >> (fun x -> x.Remove(x.IndexOf(".en")))
+            mainFiles
+            |> Seq.exists (fun x -> x.Name.Contains(getFileName extraFile.Name))
+            |> not
         
         // skip checking if no main files found
         let orphans = 
             if Seq.isEmpty mainFiles then extraFiles |> Seq.map (fun x -> x.FullName)
             else 
                 extraFiles
-                |> Seq.filter (fun x -> not (hasCorrespondingMainFile x.Name))
+                |> Seq.filter doesNotHaveCorrespondingMainFile
                 |> Seq.map (fun x -> x.FullName)
         
         orphans
