@@ -47,19 +47,32 @@ let getDirectorySize =
     >> Seq.sumBy (fun x -> x.Length)
     >> int64ToMB
 
+/// ignore special folders starting with "."
+let private ignoreSpecialDirectories (directory : DirectoryInfo) = not (directory.Name.StartsWith("."))
+
 /// Does directory path contain subdirectories?
 let isLeafNode path = 
-    let subDirectories = getTopDirectoriesList path
-    match subDirectories with
-    | Success(x, _) -> false
+    let filterSpecialDirectories (listDirectories : Collections.Generic.IEnumerable<DirectoryInfo>) = 
+        let directories = listDirectories |> Seq.filter ignoreSpecialDirectories
+        if Seq.isEmpty directories then fail SubdirectoriesDoNotExist
+        else succeed directories
+    
+    let foundSubdirectories = 
+        path
+        |> getTopDirectoriesList
+        |> bindR filterSpecialDirectories
+    
+    match foundSubdirectories with
+    | Success _ -> false
     | Failure _ -> true
 
 /// Get list of folders that are leaf nodes
 let filterDirectoriesByLeafNodes (listDirectories : Collections.Generic.IEnumerable<DirectoryInfo>) = 
     let filtered = 
         listDirectories
-        |> Seq.filter (fun x -> isLeafNode x.FullName)
+        |> Seq.filter ignoreSpecialDirectories
         |> Seq.map (fun x -> x.FullName)
+        |> Seq.filter isLeafNode
     if Seq.isEmpty filtered then fail NoLeafNodesFound
     else succeed filtered
 
@@ -162,8 +175,13 @@ module TV =
     
     /// Get list of extra files with no corresponding main file
     let private getOrphanExtraFiles ((mainFiles : seq<FileInfo>), (extraFiles : seq<FileInfo>)) = 
+        let removeSubtitleSuffix (fileName : string) = 
+            match (fileName.EndsWith(".en")) with
+            | false -> fileName
+            | true -> fileName.Substring(0, fileName.Length - 3)
+        
         let doesNotHaveCorrespondingMainFile (extraFile : FileInfo) = 
-            let getFileName = Path.GetFileNameWithoutExtension >> (fun x -> x.Remove(x.IndexOf(".en")))
+            let getFileName = Path.GetFileNameWithoutExtension >> removeSubtitleSuffix
             mainFiles
             |> Seq.exists (fun x -> x.Name.Contains(getFileName extraFile.Name))
             |> not
