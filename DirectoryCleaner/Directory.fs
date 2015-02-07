@@ -2,10 +2,12 @@
 
 open System
 open System.IO
+open System.Text.RegularExpressions
 open ROP
 open Size
 
 let int64ToMB = Size.int64ToBytes >> Size.bytesToMegaBytes
+let filesVideo = [ ".avi"; ".flv"; ".mkv"; ".mp4"; ".mpeg"; ".mpg"; ".wmv"; ".3gp" ]
 
 type FailureMessage = 
     | PathNameCannotBeEmpty
@@ -165,12 +167,21 @@ module TV =
     [<Literal>]
     let thresholdFileSize = 100L<MB>
     
-    /// Separate file list into two based on file size
-    let private partitionFilesBySize (listFiles : Collections.Generic.IEnumerable<FileInfo>) = 
-        let mainFiles, extraFiles = 
-            listFiles |> Utility.partition (fun x -> 
-                             let fileSize = x.Length |> int64ToMB
-                             fileSize > thresholdFileSize)
+    /// Separate file list into two: video files and extra files
+    let private partitionFilesByTypeOrSize (listFiles : Collections.Generic.IEnumerable<FileInfo>) = 
+        let isMainFile (file : FileInfo) = 
+            let sizeGreaterThanThreshold = 
+                let fileSize = file.Length |> int64ToMB
+                fileSize > thresholdFileSize
+            
+            let extensionIsVideo = 
+                let fileExtension = Path.GetExtension file.Name
+                filesVideo |> Seq.exists (fun x -> x = fileExtension)
+            
+            if (sizeGreaterThanThreshold || extensionIsVideo) then true
+            else false
+        
+        let mainFiles, extraFiles = listFiles |> Utility.partition isMainFile
         (mainFiles, extraFiles)
     
     /// Get list of extra files with no corresponding main file
@@ -180,8 +191,21 @@ module TV =
             | false -> fileName
             | true -> fileName.Substring(0, fileName.Length - 3)
         
+        let removeThumbnailSuffix (fileName : string) = 
+            match (fileName.EndsWith("-thumb")) with
+            | false -> fileName
+            | true -> fileName.Substring(0, fileName.Length - 6)
+        
+        let removeRippingGroupSuffix (fileName : string) = 
+            let exp = "\s\([\w\.\-\s\,]+\)?$"
+            Regex.Replace(fileName, exp, String.Empty)
+        
         let doesNotHaveCorrespondingMainFile (extraFile : FileInfo) = 
-            let getFileName = Path.GetFileNameWithoutExtension >> removeSubtitleSuffix
+            let getFileName = 
+                Path.GetFileNameWithoutExtension
+                >> removeSubtitleSuffix
+                >> removeThumbnailSuffix
+                >> removeRippingGroupSuffix
             mainFiles
             |> Seq.exists (fun x -> x.Name.Contains(getFileName extraFile.Name))
             |> not
@@ -200,7 +224,7 @@ module TV =
     let private getSubDirectoryFiles (subdirectories : seq<string>) = 
         let getOrphansPerDirectory = 
             getFilesList
-            >> partitionFilesBySize
+            >> partitionFilesByTypeOrSize
             >> getOrphanExtraFiles
         
         let orphans = 
