@@ -2,20 +2,21 @@
 
 open System
 open System.IO
+open Utility
 
 let getCurrentDateTime() = 
     let format = "yyyy-MMM-dd HH:mm:ss"
-    let dt = DateTime.Now
-    dt.ToString(format)
+    let dt = Utility.LocalDateTime (DateTime.Now)
+    Utility.formatLocalDateTime format dt
 
-let separator = "---------------------------------------"
+let private separator = "---------------------------------------"
 
-let buildHeader() = 
+let private buildHeader() = 
     let format = "Cleaned on: {0}
 {1}"
     String.Format(format, getCurrentDateTime(), separator)
 
-let buildFooter() = 
+let private buildFooter() = 
     let format = "{0}
 
 "
