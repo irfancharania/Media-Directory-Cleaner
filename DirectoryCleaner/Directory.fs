@@ -9,6 +9,9 @@ open Size
 let int64ToMB = Size.int64ToBytes >> Size.bytesToMegaBytes
 let filesVideo = [ ".avi"; ".flv"; ".mkv"; ".mp4"; ".mpeg"; ".mpg"; ".wmv"; ".3gp" ]
 
+[<Literal>]
+let logFileName = "cleanLog.log"
+
 type FailureMessage = 
     | PathNameCannotBeEmpty
     | DirectoryNotFound
@@ -16,6 +19,14 @@ type FailureMessage =
     | NoLeafNodesFound
     | SubdirectoriesDoNotExist
     | SubdirectoriesBelowThresholdDoNotExist
+
+let convertFailureMessage = 
+    function 
+    | PathNameCannotBeEmpty -> "Path name cannot be empty"
+    | DirectoryNotFound -> "Directory not found"
+    // Don't bother logging these -- don't care about these errors
+    | FilesNotFound | NoLeafNodesFound | SubdirectoriesDoNotExist | SubdirectoriesBelowThresholdDoNotExist -> 
+        String.Empty
 
 /// Validate input path
 let pathExists (path : string) = 
@@ -132,12 +143,16 @@ module Movies =
         else succeed filtered
     
     let cleanDirectory (path : string) = 
+        let logFilePath = Path.Combine(path, logFileName)
+        let log = Logging.logListToFile logFilePath
         path
         |> pathExists
         |> bindR getAllDirectoriesList
         |> bindR filterDirectoriesByLeafNodes
         |> bindR filterDirectoriesBySize
         |> successTee (fun (x, _) -> deleteFolders x)
+        |> mapMessagesR convertFailureMessage
+        |> log
 
 //-------------------------------------------------------------------
 /// TV
@@ -200,22 +215,30 @@ module TV =
             let exp = "\s\([\w\.\-\s\,]+\)?$"
             Regex.Replace(fileName, exp, String.Empty)
         
-        let doesNotHaveCorrespondingMainFile (extraFile : FileInfo) = 
+        let isOrphanFile (extraFile : FileInfo) = 
             let getFileName = 
                 Path.GetFileNameWithoutExtension
                 >> removeSubtitleSuffix
                 >> removeThumbnailSuffix
                 >> removeRippingGroupSuffix
-            mainFiles
-            |> Seq.exists (fun x -> x.Name.Contains(getFileName extraFile.Name))
-            |> not
+            
+            let fileName = getFileName extraFile.Name
+            
+            let noCorrespondingMainFile = 
+                mainFiles
+                |> Seq.exists (fun x -> x.Name.Contains(fileName))
+                |> not
+            
+            let isNotLocalFolderImage = fileName <> "folder"
+            // orphan files
+            noCorrespondingMainFile && isNotLocalFolderImage
         
         // skip checking if no main files found
         let orphans = 
             if Seq.isEmpty mainFiles then extraFiles |> Seq.map (fun x -> x.FullName)
             else 
                 extraFiles
-                |> Seq.filter doesNotHaveCorrespondingMainFile
+                |> Seq.filter isOrphanFile
                 |> Seq.map (fun x -> x.FullName)
         
         orphans
@@ -236,9 +259,13 @@ module TV =
         else succeed orphans
     
     let cleanDirectory (path : string) = 
+        let logFilePath = Path.Combine(path, logFileName)
+        let log = Logging.logListToFile logFilePath
         path
         |> pathExists
         |> bindR getAllDirectoriesList
         |> bindR filterDirectoriesByLeafNodes
         |> bindR getSubDirectoryFiles
         |> successTee (fun (x, _) -> deleteFiles x)
+        |> mapMessagesR convertFailureMessage
+        |> log
