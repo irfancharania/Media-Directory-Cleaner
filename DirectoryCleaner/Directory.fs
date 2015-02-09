@@ -93,16 +93,10 @@ let filterDirectoriesByLeafNodes (listDirectories : Collections.Generic.IEnumera
 let printPathList (pathList : seq<string>) = pathList |> Seq.iter (fun x -> printfn "%s" x)
 
 /// Delete folders in list of paths
-let deleteFolders (pathList : seq<string>) = 
-    //pathList 
-    //|> Seq.iter (fun x -> Directory.Delete(x, true))
-    printPathList pathList
+let deleteFolders (pathList : seq<string>) = pathList |> Seq.iter (fun x -> Directory.Delete(x, true))
 
 /// Delete files in list of paths
-let deleteFiles (pathList : seq<string>) = 
-    //pathList 
-    //|> Seq.iter File.Delete
-    printPathList pathList
+let deleteFiles (pathList : seq<string>) = pathList |> Seq.iter File.Delete
 
 //-------------------------------------------------------------------
 /// Movies
@@ -150,9 +144,8 @@ module Movies =
         |> bindR getAllDirectoriesList
         |> bindR filterDirectoriesByLeafNodes
         |> bindR filterDirectoriesBySize
+        |> successTee (fun (x, _) -> log x)
         |> successTee (fun (x, _) -> deleteFolders x)
-        |> mapMessagesR convertFailureMessage
-        |> log
 
 //-------------------------------------------------------------------
 /// TV
@@ -266,6 +259,5 @@ module TV =
         |> bindR getAllDirectoriesList
         |> bindR filterDirectoriesByLeafNodes
         |> bindR getSubDirectoryFiles
+        |> successTee (fun (x, _) -> log x)
         |> successTee (fun (x, _) -> deleteFiles x)
-        |> mapMessagesR convertFailureMessage
-        |> log
