@@ -91,3 +91,9 @@ TV Shows
    |       |----2008
    |            |--Files
 ```
+
+
+
+## Notes
+
+> - Directories starting with ```.``` are ignored (e.g. ```.actors```)
