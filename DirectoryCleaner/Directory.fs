@@ -37,7 +37,6 @@ let pathExists (path : string) =
     let directoryFound path = 
         if Directory.Exists(path) then succeed (path)
         else fail DirectoryNotFound
-    
     path
     |> pathNotBlank
     |> bindR directoryFound
@@ -136,16 +135,23 @@ module Movies =
         if Seq.isEmpty filtered then fail SubdirectoriesBelowThresholdDoNotExist
         else succeed filtered
     
-    let cleanDirectory (path : string) = 
+    let cleanDirectory (path : string) (preview : bool) = 
         let logFilePath = Path.Combine(path, logFileName)
         let log = Logging.logListToFile logFilePath
-        path
-        |> pathExists
-        |> bindR getAllDirectoriesList
-        |> bindR filterDirectoriesByLeafNodes
-        |> bindR filterDirectoriesBySize
-        |> successTee (fun (x, _) -> log x)
-        |> successTee (fun (x, _) -> deleteFolders x)
+        
+        let action = 
+            path
+            |> pathExists
+            |> bindR getAllDirectoriesList
+            |> bindR filterDirectoriesByLeafNodes
+            |> bindR filterDirectoriesBySize
+        // if preview, don't log and delete
+        match preview with
+        | true -> action
+        | false -> 
+            action
+            |> successTee (fun (x, _) -> log x)
+            |> successTee (fun (x, _) -> deleteFolders x)
 
 //-------------------------------------------------------------------
 /// TV
@@ -251,13 +257,20 @@ module TV =
         if (Seq.isEmpty orphans) then fail FilesNotFound
         else succeed orphans
     
-    let cleanDirectory (path : string) = 
+    let cleanDirectory (path : string) (preview : bool) = 
         let logFilePath = Path.Combine(path, logFileName)
         let log = Logging.logListToFile logFilePath
-        path
-        |> pathExists
-        |> bindR getAllDirectoriesList
-        |> bindR filterDirectoriesByLeafNodes
-        |> bindR getSubDirectoryFiles
-        |> successTee (fun (x, _) -> log x)
-        |> successTee (fun (x, _) -> deleteFiles x)
+        
+        let action = 
+            path
+            |> pathExists
+            |> bindR getAllDirectoriesList
+            |> bindR filterDirectoriesByLeafNodes
+            |> bindR getSubDirectoryFiles
+        // if preview, don't log and delete
+        match preview with
+        | true -> action
+        | false -> 
+            action
+            |> successTee (fun (x, _) -> log x)
+            |> successTee (fun (x, _) -> deleteFiles x)

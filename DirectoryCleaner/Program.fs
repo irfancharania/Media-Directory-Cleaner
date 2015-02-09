@@ -22,8 +22,8 @@ module Usage =
         printfn "  example <command> [--<flag> ...] [-<setting> value ...]"
         printfn ""
         printfn "Commands:"
-        printfn "  tv -path <TV Shows path>"
-        printfn "  movies -path <Movies path>"
+        printfn "  tv -path <TV Shows path> [--preview]"
+        printfn "  movies -path <Movies path> [--preview]"
     
     ///A handler which prints the usage to the console
     let exec = handler (fun _ -> print())
@@ -33,16 +33,22 @@ module Cleaner =
     [<Literal>]
     let PathKey = "path"
     
+    ///The key used for the preview flag
+    [<Literal>]
+    let PreviewFlag = "preview"
+    
     let private exec f = 
         handler (fun args -> 
-            match (App.tryGetSetting PathKey args) with
-            | Some path -> 
-                f path
-                |> mapMessagesR Directory.convertFailureMessage
-                |> failureTee (fun x -> 
-                       let err = x |> Seq.fold (+) ""
-                       if err <> "" then failwith err)
-                |> ignore
+            let path = App.tryGetSetting PathKey args
+            let preview = App.isFlagged PreviewFlag args
+            match path, preview with
+            | Some path, preview -> 
+                let result = f path preview |> mapMessagesR Directory.convertFailureMessage
+                match result with
+                | Success(x, _) -> x |> Seq.iter (fun y -> printfn "%s" y)
+                | Failure x -> 
+                    let err = x |> Seq.fold (+) ""
+                    if err <> "" then failwith err
             | _ -> Usage.print())
     
     let execTV = exec Directory.TV.cleanDirectory
