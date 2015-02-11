@@ -27,7 +27,7 @@
     <PlatformTarget>AnyCPU</PlatformTarget>
     <DocumentationFile>bin\Debug\DirectoryCleaner.XML</DocumentationFile>
     <Prefer32Bit>true</Prefer32Bit>
-    <StartArguments>tv -path "Z:\TV Shows\"</StartArguments>
+    <StartArguments>tv -path "Z:\TV Shows"</StartArguments>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
@@ -52,19 +52,13 @@
   <ItemGroup>
     <Compile Include="Utility.fs" />
     <Compile Include="ROP.fs" />
+    <Compile Include="App.fs" />
     <Compile Include="Size.fs" />
     <Compile Include="Logging.fs" />
     <Compile Include="Directory.fs" />
     <Compile Include="Program.fs" />
     <None Include="App.config" />
     <None Include="Script1.fsx" />
-  </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\FSharp.ConsoleApp\FSharp.ConsoleApp.fsproj">
-      <Name>FSharp.ConsoleApp</Name>
-      <Project>{9247c78e-e2f8-4faf-a0b3-f276e32d02c7}</Project>
-      <Private>True</Private>
-    </ProjectReference>
   </ItemGroup>
   <PropertyGroup>
     <MinimumVisualStudioVersion Condition="'$(MinimumVisualStudioVersion)' == ''">11</MinimumVisualStudioVersion>
