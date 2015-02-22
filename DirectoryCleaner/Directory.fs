@@ -37,6 +37,7 @@ let pathExists (path : string) =
     let directoryFound path = 
         if Directory.Exists(path) then succeed (path)
         else fail DirectoryNotFound
+    
     path
     |> pathNotBlank
     |> bindR directoryFound
@@ -181,6 +182,13 @@ module TV =
     [<Literal>]
     let thresholdFileSize = 100L<MB>
     
+    /// Ignore local folder image files as we want to keep these
+    let private filterLocalFolderImageFiles (listFiles : Collections.Generic.IEnumerable<FileInfo>) = 
+        let isNotLocalFolderImage (file : FileInfo) = 
+            if file.Name.StartsWith("folder") then false
+            else true
+        listFiles |> Seq.filter isNotLocalFolderImage
+    
     /// Separate file list into two: video files and extra files
     let private partitionFilesByTypeOrSize (listFiles : Collections.Generic.IEnumerable<FileInfo>) = 
         let isMainFile (file : FileInfo) = 
@@ -214,7 +222,7 @@ module TV =
             let exp = "\s\([\w\.\-\s\,]+\)?$"
             Regex.Replace(fileName, exp, String.Empty)
         
-        let isOrphanFile (extraFile : FileInfo) = 
+        let hasNoCorrespondingMainFile (extraFile : FileInfo) = 
             let getFileName = 
                 Path.GetFileNameWithoutExtension
                 >> removeSubtitleSuffix
@@ -222,30 +230,22 @@ module TV =
                 >> removeRippingGroupSuffix
             
             let fileName = getFileName extraFile.Name
-            
-            let noCorrespondingMainFile = 
-                mainFiles
-                |> Seq.exists (fun x -> x.Name.Contains(fileName))
-                |> not
-            
-            let isNotLocalFolderImage = fileName <> "folder"
-            // orphan files
-            noCorrespondingMainFile && isNotLocalFolderImage
+            mainFiles
+            |> Seq.exists (fun x -> x.Name.Contains(fileName))
+            |> not
         
         // skip checking if no main files found
         let orphans = 
-            if Seq.isEmpty mainFiles then extraFiles |> Seq.map (fun x -> x.FullName)
-            else 
-                extraFiles
-                |> Seq.filter isOrphanFile
-                |> Seq.map (fun x -> x.FullName)
+            if Seq.isEmpty mainFiles then extraFiles
+            else extraFiles |> Seq.filter hasNoCorrespondingMainFile
         
-        orphans
+        orphans |> Seq.map (fun x -> x.FullName)
     
     /// Get list of files from all subdirectories
     let private getSubDirectoryFiles (subdirectories : seq<string>) = 
         let getOrphansPerDirectory = 
             getFilesList
+            >> filterLocalFolderImageFiles
             >> partitionFilesByTypeOrSize
             >> getOrphanExtraFiles
         
