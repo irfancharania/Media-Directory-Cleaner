@@ -9,7 +9,7 @@ open Size
 let int64ToMB = Size.int64ToBytes >> Size.bytesToMegaBytes
 let int64ToKB = Size.int64ToBytes >> Size.bytesToKiloBytes
 let filesVideo = [ ".avi"; ".flv"; ".mkv"; ".mp4"; ".mpeg"; ".mpg"; ".wmv"; ".3gp" ]
-let filesAudio = [ ".mp3"; ".m4a"; ".flac"; ".wav"; ".wma"; ".aac"; ".aiff"; ".m4b"; ".m4p"; ".ogg"]
+let filesAudio = [ ".mp3"; ".m4a"; ".flac"; ".wav"; ".wma"; ".aac"; ".aiff"; ".m4b"; ".m4p"; ".ogg" ]
 
 [<Literal>]
 let logFileName = "cleanLog.log"
@@ -301,8 +301,8 @@ module Music =
     [<Literal>]
     let thresholdFileSize = 500L<kB>
     
-    /// Separate file list into two: music files and extra files
-    let private partitionFilesByTypeOrSize (listFiles : Collections.Generic.IEnumerable<FileInfo>) = 
+    /// Get list of extra files with no corresponding main file
+    let private hasOrphanFiles (listFiles : Collections.Generic.IEnumerable<FileInfo>) = 
         let isMainFile (file : FileInfo) = 
             let sizeGreaterThanThreshold = 
                 let fileSize = file.Length |> int64ToKB
@@ -315,25 +315,22 @@ module Music =
             if (sizeGreaterThanThreshold || extensionIsAudio) then true
             else false
         
-        let mainFiles, extraFiles = listFiles |> Utility.partition isMainFile
-        (mainFiles, extraFiles)
-
-    /// Get list of extra files with no corresponding main file
-    let private hasOrphanFiles ((mainFiles : seq<FileInfo>), (extraFiles : seq<FileInfo>)) = 
-        mainFiles |> Seq.isEmpty
-   
+        let isExtraFile = isMainFile >> not
+        let hasMainFiles = listFiles |> Seq.exists (isMainFile)
+        let hasExtraFiles = listFiles |> Seq.exists (isExtraFile)
+        
+        match hasMainFiles, hasExtraFiles with
+        | false, true -> true
+        | _, _ -> false
+    
     let private filterDirectoriesWithoutMainFiles (subdirectories : seq<string>) = 
-        let getOrphanedDirectory = 
-            getFilesList
-            >> partitionFilesByTypeOrSize
-            >> hasOrphanFiles
-
-        let orphans = subdirectories
-                      |> Seq.filter (getOrphanedDirectory)
-
+        let getOrphanedDirectory = getFilesList >> hasOrphanFiles
+        
+        let orphans = subdirectories |> Seq.filter (getOrphanedDirectory)
+        
         if (Seq.isEmpty orphans) then fail SubdirectoriesBelowThresholdDoNotExist
         else succeed orphans
-
+    
     let cleanDirectory (path : string) (preview : bool) = 
         let logFilePath = Path.Combine(path, logFileName)
         let log = Logging.logListToFile logFilePath
