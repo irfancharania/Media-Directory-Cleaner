@@ -7,7 +7,9 @@ open ROP
 open Size
 
 let int64ToMB = Size.int64ToBytes >> Size.bytesToMegaBytes
+let int64ToKB = Size.int64ToBytes >> Size.bytesToKiloBytes
 let filesVideo = [ ".avi"; ".flv"; ".mkv"; ".mp4"; ".mpeg"; ".mpg"; ".wmv"; ".3gp" ]
+let filesAudio = [ ".mp3"; ".m4a"; ".flac"; ".wav"; ".wma"; ".aac"; ".aiff"; ".m4b"; ".m4p"; ".ogg"]
 
 [<Literal>]
 let logFileName = "cleanLog.log"
@@ -274,3 +276,78 @@ module TV =
             action
             |> successTee (fun (x, _) -> log x)
             |> successTee (fun (x, _) -> deleteFiles x)
+
+//-------------------------------------------------------------------
+/// Music
+(* 
+Music folder may contain 
+1. audio files by album or directly within folder (large size)
+2. artwork files (small size)
+
+If files sized below threshold do not have a known name or extension, delete them
+
+Music files are expected to be in leaf nodes.
+Expected folder structure:
+
+Music
+   |----Artist
+   |       |----Album
+   |            |--Files
+   |----Artist
+   |       |--Files
+
+*)
+module Music = 
+    [<Literal>]
+    let thresholdFileSize = 500L<kB>
+    
+    /// Separate file list into two: music files and extra files
+    let private partitionFilesByTypeOrSize (listFiles : Collections.Generic.IEnumerable<FileInfo>) = 
+        let isMainFile (file : FileInfo) = 
+            let sizeGreaterThanThreshold = 
+                let fileSize = file.Length |> int64ToKB
+                fileSize > thresholdFileSize
+            
+            let extensionIsAudio = 
+                let fileExtension = Path.GetExtension file.Name
+                filesAudio |> Seq.exists (fun x -> x = fileExtension)
+            
+            if (sizeGreaterThanThreshold || extensionIsAudio) then true
+            else false
+        
+        let mainFiles, extraFiles = listFiles |> Utility.partition isMainFile
+        (mainFiles, extraFiles)
+
+    /// Get list of extra files with no corresponding main file
+    let private hasOrphanFiles ((mainFiles : seq<FileInfo>), (extraFiles : seq<FileInfo>)) = 
+        mainFiles |> Seq.isEmpty
+   
+    let private filterDirectoriesWithoutMainFiles (subdirectories : seq<string>) = 
+        let getOrphanedDirectory = 
+            getFilesList
+            >> partitionFilesByTypeOrSize
+            >> hasOrphanFiles
+
+        let orphans = subdirectories
+                      |> Seq.filter (getOrphanedDirectory)
+
+        if (Seq.isEmpty orphans) then fail SubdirectoriesBelowThresholdDoNotExist
+        else succeed orphans
+
+    let cleanDirectory (path : string) (preview : bool) = 
+        let logFilePath = Path.Combine(path, logFileName)
+        let log = Logging.logListToFile logFilePath
+        
+        let action = 
+            path
+            |> pathExists
+            |> bindR getAllDirectoriesList
+            |> bindR filterDirectoriesByLeafNodes
+            |> bindR filterDirectoriesWithoutMainFiles
+        // if preview, don't log and delete
+        match preview with
+        | true -> action
+        | false -> 
+            action
+            |> successTee (fun (x, _) -> log x)
+            |> successTee (fun (x, _) -> deleteFolders x)

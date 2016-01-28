@@ -32,9 +32,10 @@ Examples:
 
 ### Mode
 
-There are 2 available modes:
+There are 3 available modes:
 - tv
 - movies
+- music
 
 ### Path
 
@@ -92,6 +93,23 @@ TV Shows
    |            |--Files
 ```
 
+
+### Music
+
+Music folder will contain folders with subdirectories.
+
+Leaf-nodes without identifiable audio files sized below **500Kb** will be subject for deletion, as movie files are generally greater than this size. Any left over directories will become leaf directories for next run.
+
+#### Expected folder structure:
+
+```
+Music
+   |----Artist
+   |       |----Album
+   |            |--Files
+   |----Artist
+   |       |--Files
+```
 
 
 ## Notes

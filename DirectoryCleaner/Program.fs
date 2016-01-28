@@ -9,6 +9,8 @@ let handler f =
         try 
             printfn ""
             f args
+            // pause for debug
+            // System.Console.ReadKey() |> ignore
             0
         with e -> 
             printfn "Error: %s" e.Message
@@ -24,6 +26,7 @@ module Usage =
         printfn "Commands:"
         printfn "  tv -path <TV Shows path> [--preview]"
         printfn "  movies -path <Movies path> [--preview]"
+        printfn "  music -path <Music path> [--preview]"
     
     ///A handler which prints the usage to the console
     let exec = handler (fun _ -> print())
@@ -53,6 +56,7 @@ module Cleaner =
     
     let execTV = exec Directory.TV.cleanDirectory
     let execMovies = exec Directory.Movies.cleanDirectory
+    let execMusic = exec Directory.Music.cleanDirectory
 
 ///Contains literals of commands
 module Commands = 
@@ -62,8 +66,12 @@ module Commands =
     [<Literal>]
     let Movies = "movies"
 
+    [<Literal>]
+    let Music = "music"
+
 ///Application entry point
 [<EntryPoint>]
 let main argv = 
     App.run Usage.exec [ (Commands.TV, Cleaner.execTV)
-                         (Commands.Movies, Cleaner.execMovies) ] argv
+                         (Commands.Movies, Cleaner.execMovies)
+                         (Commands.Music, Cleaner.execMusic) ] argv
