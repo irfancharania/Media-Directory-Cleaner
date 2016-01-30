@@ -320,7 +320,7 @@ module Music =
         let hasExtraFiles = listFiles |> Seq.exists (isExtraFile)
         
         match hasMainFiles, hasExtraFiles with
-        | false, true -> true
+        | false, _ -> true
         | _, _ -> false
     
     let private filterDirectoriesWithoutMainFiles (subdirectories : seq<string>) = 
