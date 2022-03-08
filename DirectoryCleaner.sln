@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 2013
-VisualStudioVersion = 12.0.31101.0
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.31729.503
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "DirectoryCleaner", "DirectoryCleaner\DirectoryCleaner.fsproj", "{95164755-BDAD-42B3-9541-3F09E7736D44}"
 EndProject
@@ -13,15 +13,24 @@ EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
+		Debug|x64 = Debug|x64
 		Release|Any CPU = Release|Any CPU
+		Release|x64 = Release|x64
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
 		{95164755-BDAD-42B3-9541-3F09E7736D44}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{95164755-BDAD-42B3-9541-3F09E7736D44}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{95164755-BDAD-42B3-9541-3F09E7736D44}.Debug|x64.ActiveCfg = Debug|x64
+		{95164755-BDAD-42B3-9541-3F09E7736D44}.Debug|x64.Build.0 = Debug|x64
 		{95164755-BDAD-42B3-9541-3F09E7736D44}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{95164755-BDAD-42B3-9541-3F09E7736D44}.Release|Any CPU.Build.0 = Release|Any CPU
+		{95164755-BDAD-42B3-9541-3F09E7736D44}.Release|x64.ActiveCfg = Release|x64
+		{95164755-BDAD-42B3-9541-3F09E7736D44}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {9161413A-3F91-4D03-A95E-95E73625CC18}
 	EndGlobalSection
 EndGlobal
