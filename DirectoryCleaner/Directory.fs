@@ -187,7 +187,8 @@ module TV =
     /// Ignore local folder image files as we want to keep these
     let private filterLocalFolderImageFiles (listFiles : Collections.Generic.IEnumerable<FileInfo>) = 
         let isNotLocalFolderImage (file : FileInfo) = 
-            if file.Name.StartsWith("folder") then false
+            if (file.Name.StartsWith("folder") ||
+                file.Name.StartsWith("poster")) then false
             else true
         listFiles |> Seq.filter isNotLocalFolderImage
     
@@ -211,7 +212,9 @@ module TV =
     /// Get list of extra files with no corresponding main file
     let private getOrphanExtraFiles ((mainFiles : seq<FileInfo>), (extraFiles : seq<FileInfo>)) = 
         let removeSubtitleSuffix (fileName : string) = 
-            match (fileName.EndsWith(".en")) with
+            match ( fileName.EndsWith(".en")  ||
+                    fileName.EndsWith(".eng") ||
+                    fileName.EndsWith(".english")) with
             | false -> fileName
             | true -> fileName.Substring(0, fileName.Length - 3)
         
