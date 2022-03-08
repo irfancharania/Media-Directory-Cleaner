@@ -1,0 +1,24 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net6.0-windows</TargetFramework>
+    <AssemblyName>DirectoryCleaner</AssemblyName>
+    <DebugType>embedded</DebugType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="Utility.fs" />
+    <Compile Include="ROP.fs" />
+    <Compile Include="App.fs" />
+    <Compile Include="Size.fs" />
+    <Compile Include="Logging.fs" />
+    <Compile Include="Directory.fs" />
+    <Compile Include="Program.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Update="FSharp.Core" Version="6.0.3" />
+  </ItemGroup>
+
+</Project>

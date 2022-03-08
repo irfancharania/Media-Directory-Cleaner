@@ -45,7 +45,7 @@ let pathExists (path : string) =
     |> bindR directoryFound
 
 /// Get subdirectories for path
-let private getDirectoriesList option path = 
+let private getDirectoriesList (option:SearchOption) path = 
     let directories = DirectoryInfo(path).EnumerateDirectories("*.*", option)
     if Seq.isEmpty directories then fail SubdirectoriesDoNotExist
     else succeed directories
@@ -208,8 +208,9 @@ module TV =
         
         let mainFiles, extraFiles = listFiles |> Utility.partition isMainFile
         (mainFiles, extraFiles)
-    
+
     /// Get list of extra files with no corresponding main file
+    type GetFileName = string -> string
     let private getOrphanExtraFiles ((mainFiles : seq<FileInfo>), (extraFiles : seq<FileInfo>)) = 
         let removeSubtitleSuffix (fileName : string) = 
             match ( fileName.EndsWith(".en")  ||
@@ -228,13 +229,14 @@ module TV =
             Regex.Replace(fileName, exp, String.Empty)
         
         let hasNoCorrespondingMainFile (extraFile : FileInfo) = 
-            let getFileName = 
+            let getFileName:GetFileName = 
                 Path.GetFileNameWithoutExtension
                 >> removeSubtitleSuffix
                 >> removeThumbnailSuffix
                 >> removeRippingGroupSuffix
             
             let fileName = getFileName extraFile.Name
+
             mainFiles
             |> Seq.exists (fun x -> x.Name.Contains(fileName))
             |> not
