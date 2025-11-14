@@ -3,7 +3,6 @@
 open System
 open System.IO
 open System.Text.RegularExpressions
-open ROP
 open Size
 
 let int64ToMB = Size.int64ToBytes >> Size.bytesToMegaBytes
@@ -26,29 +25,28 @@ let convertFailureMessage =
     function 
     | PathNameCannotBeEmpty -> "Path name cannot be empty"
     | DirectoryNotFound -> "Directory not found"
-    // Don't bother logging these -- don't care about these errors
     | FilesNotFound | NoLeafNodesFound | SubdirectoriesDoNotExist | SubdirectoriesBelowThresholdDoNotExist -> 
         String.Empty
 
+// Replace ROP with Result type
+type CleanerResult<'T> = Result<'T, FailureMessage>
+
 /// Validate input path
-let pathExists (path : string) = 
-    let pathNotBlank path = 
-        if not (String.IsNullOrEmpty(path)) then succeed path
-        else fail PathNameCannotBeEmpty
-    
-    let directoryFound path = 
-        if Directory.Exists(path) then succeed (path)
-        else fail DirectoryNotFound
-    
-    path
-    |> pathNotBlank
-    |> bindR directoryFound
+let pathExists (path : string) : CleanerResult<string> = 
+    if String.IsNullOrEmpty(path) then 
+        Error PathNameCannotBeEmpty
+    elif not (Directory.Exists(path)) then 
+        Error DirectoryNotFound
+    else 
+        Ok path
 
 /// Get subdirectories for path
-let private getDirectoriesList (option:SearchOption) path = 
+let private getDirectoriesList (option:SearchOption) (path: string) : CleanerResult<seq<DirectoryInfo>> = 
     let directories = DirectoryInfo(path).EnumerateDirectories("*.*", option)
-    if Seq.isEmpty directories then fail SubdirectoriesDoNotExist
-    else succeed directories
+    if Seq.isEmpty directories then 
+        Error SubdirectoriesDoNotExist
+    else 
+        Ok directories
 
 let getTopDirectoriesList = getDirectoriesList SearchOption.TopDirectoryOnly
 let getAllDirectoriesList = getDirectoriesList SearchOption.AllDirectories
@@ -63,137 +61,95 @@ let getDirectorySize =
     >> int64ToMB
 
 /// ignore special folders starting with "."
-let private ignoreSpecialDirectories (directory : DirectoryInfo) = not (directory.Name.StartsWith("."))
+let private ignoreSpecialDirectories (directory : DirectoryInfo) = 
+    not (directory.Name.StartsWith("."))
 
 /// Does directory path contain subdirectories?
 let isLeafNode path = 
-    let filterSpecialDirectories (listDirectories : Collections.Generic.IEnumerable<DirectoryInfo>) = 
+    let filterSpecialDirectories (listDirectories : seq<DirectoryInfo>) = 
         let directories = listDirectories |> Seq.filter ignoreSpecialDirectories
-        if Seq.isEmpty directories then fail SubdirectoriesDoNotExist
-        else succeed directories
+        if Seq.isEmpty directories then 
+            Error SubdirectoriesDoNotExist
+        else 
+            Ok directories
     
-    let foundSubdirectories = 
-        path
-        |> getTopDirectoriesList
-        |> bindR filterSpecialDirectories
-    
-    match foundSubdirectories with
-    | Success _ -> false
-    | Failure _ -> true
+    match getTopDirectoriesList path |> Result.bind filterSpecialDirectories with
+    | Ok _ -> false
+    | Error _ -> true
 
 /// Get list of folders that are leaf nodes
-let filterDirectoriesByLeafNodes (listDirectories : Collections.Generic.IEnumerable<DirectoryInfo>) = 
+let filterDirectoriesByLeafNodes (listDirectories : seq<DirectoryInfo>) : CleanerResult<seq<string>> = 
     let filtered = 
         listDirectories
         |> Seq.filter ignoreSpecialDirectories
         |> Seq.map (fun x -> x.FullName)
         |> Seq.filter isLeafNode
-    if Seq.isEmpty filtered then fail NoLeafNodesFound
-    else succeed filtered
+    
+    if Seq.isEmpty filtered then 
+        Error NoLeafNodesFound
+    else 
+        Ok filtered
 
 /// Print paths
-let printPathList (pathList : seq<string>) = pathList |> Seq.iter (fun x -> printfn "%s" x)
+let printPathList (pathList : seq<string>) = 
+    pathList |> Seq.iter (fun x -> printfn "%s" x)
 
 /// Delete folders in list of paths
-let deleteFolders (pathList : seq<string>) = pathList |> Seq.iter (fun x -> Directory.Delete(x, true))
+let deleteFolders (pathList : seq<string>) = 
+    pathList |> Seq.iter (fun x -> Directory.Delete(x, true))
 
 /// Delete files in list of paths
-let deleteFiles (pathList : seq<string>) = pathList |> Seq.iter File.Delete
+let deleteFiles (pathList : seq<string>) = 
+    pathList |> Seq.iter File.Delete
 
 //-------------------------------------------------------------------
 /// Movies
-(* 
-Folders with movie files will have size above threshold.
-
-Main movie folder may contain set folders with subdirectories.
-Delete leaf directories below threshold.
-
-Any left over directories will become leaf directories for next run
-
-Expected folder structure:
-
-Movies
-   |---- Some Movie (2015)
-   |       |---- <ignore>
-   |
-   |---- Movie Set
-   |       |---- Another Movie 1 (2010)
-   |       |        |---- <ignore>
-   |       |
-   |       |---- Another Movie 2 (2011)
-
-
-*)
 module Movies = 
     [<Literal>]
     let thresholdFolderSize = 100L<MB>
     
     /// Get list of folders below size threshold size
-    let private filterDirectoriesBySize (listDirectories : seq<string>) = 
+    let private filterDirectoriesBySize (listDirectories : seq<string>) : CleanerResult<seq<string>> = 
         let filtered = 
-            listDirectories |> Seq.choose (fun x -> 
-                                   let folderSize = getDirectorySize x
-                                   if folderSize < thresholdFolderSize then Some(x)
-                                   else None)
-        if Seq.isEmpty filtered then fail SubdirectoriesBelowThresholdDoNotExist
-        else succeed filtered
+            listDirectories 
+            |> Seq.choose (fun x -> 
+                let folderSize = getDirectorySize x
+                if folderSize < thresholdFolderSize then Some(x)
+                else None)
+        
+        if Seq.isEmpty filtered then 
+            Error SubdirectoriesBelowThresholdDoNotExist
+        else 
+            Ok filtered
     
-    let cleanDirectory (path : string) (preview : bool) = 
+    let cleanDirectory (path : string) (preview : bool) : CleanerResult<seq<string>> = 
         let logFilePath = Path.Combine(path, logFileName)
         let log = Logging.logListToFile logFilePath
         
-        let action = 
-            path
-            |> pathExists
-            |> bindR getAllDirectoriesList
-            |> bindR filterDirectoriesByLeafNodes
-            |> bindR filterDirectoriesBySize
-        // if preview, don't log and delete
-        match preview with
-        | true -> action
-        | false -> 
-            action
-            |> successTee (fun (x, _) -> log x)
-            |> successTee (fun (x, _) -> deleteFolders x)
+        pathExists path
+        |> Result.bind getAllDirectoriesList
+        |> Result.bind filterDirectoriesByLeafNodes
+        |> Result.bind filterDirectoriesBySize
+        |> Result.map (fun toDelete ->
+            if not preview then
+                log toDelete
+                deleteFolders toDelete
+            toDelete)
 
 //-------------------------------------------------------------------
 /// TV
-(* 
-TV show files consist of 
-1. main video file (large size)
-2. extra info/artwork files (small size)
-
-All episode files for season/year are contained within same folder.
-If files sized below threshold do not have a corresponding large file, delete them
-
-TV show files are expected to be in leaf nodes.
-Expected folder structure:
-
-TV Shows
-   |----TV Show 1
-   |       |----Season #
-   |            |--Files
-   |----TV Show 2 (year)
-   |       |--Files
-   |----TV Show 3
-   |       |----2008
-   |            |--Files
-
-*)
 module TV = 
     [<Literal>]
     let thresholdFileSize = 100L<MB>
     
     /// Ignore local folder image files as we want to keep these
-    let private filterLocalFolderImageFiles (listFiles : Collections.Generic.IEnumerable<FileInfo>) = 
+    let private filterLocalFolderImageFiles (listFiles : seq<FileInfo>) = 
         let isNotLocalFolderImage (file : FileInfo) = 
-            if (file.Name.StartsWith("folder") ||
-                file.Name.StartsWith("poster")) then false
-            else true
+            not (file.Name.StartsWith("folder") || file.Name.StartsWith("poster"))
         listFiles |> Seq.filter isNotLocalFolderImage
     
     /// Separate file list into two: video files and extra files
-    let private partitionFilesByTypeOrSize (listFiles : Collections.Generic.IEnumerable<FileInfo>) = 
+    let private partitionFilesByTypeOrSize (listFiles : seq<FileInfo>) = 
         let isMainFile (file : FileInfo) = 
             let sizeGreaterThanThreshold = 
                 let fileSize = file.Length |> int64ToMB
@@ -203,53 +159,51 @@ module TV =
                 let fileExtension = Path.GetExtension file.Name
                 filesVideo |> Seq.exists (fun x -> x = fileExtension)
             
-            if (sizeGreaterThanThreshold || extensionIsVideo) then true
-            else false
+            sizeGreaterThanThreshold || extensionIsVideo
         
         let mainFiles, extraFiles = listFiles |> Utility.partition isMainFile
         (mainFiles, extraFiles)
 
     /// Get list of extra files with no corresponding main file
-    type GetFileName = string -> string
     let private getOrphanExtraFiles ((mainFiles : seq<FileInfo>), (extraFiles : seq<FileInfo>)) = 
         let removeSubtitleSuffix (fileName : string) = 
-            match ( fileName.EndsWith(".en")  ||
-                    fileName.EndsWith(".eng") ||
-                    fileName.EndsWith(".english")) with
-            | false -> fileName
-            | true -> fileName.Substring(0, fileName.Length - 3)
+            if fileName.EndsWith(".en") || fileName.EndsWith(".eng") || fileName.EndsWith(".english") then
+                fileName.Substring(0, fileName.Length - 3)
+            else
+                fileName
         
         let removeThumbnailSuffix (fileName : string) = 
-            match (fileName.EndsWith("-thumb")) with
-            | false -> fileName
-            | true -> fileName.Substring(0, fileName.Length - 6)
+            if fileName.EndsWith("-thumb") then
+                fileName.Substring(0, fileName.Length - 6)
+            else
+                fileName
         
         let removeRippingGroupSuffix (fileName : string) = 
-            let exp = "\s\([\w\.\-\s\,]+\)?$"
+            let exp = @"\s\([\w\.\-\s\,]+\)?$"
             Regex.Replace(fileName, exp, String.Empty)
         
         let hasNoCorrespondingMainFile (extraFile : FileInfo) = 
-            let getFileName:GetFileName = 
-                Path.GetFileNameWithoutExtension
-                >> removeSubtitleSuffix
-                >> removeThumbnailSuffix
-                >> removeRippingGroupSuffix
-            
-            let fileName = getFileName extraFile.Name
+            let fileName = 
+                extraFile.Name
+                |> Path.GetFileNameWithoutExtension
+                |> removeSubtitleSuffix
+                |> removeThumbnailSuffix
+                |> removeRippingGroupSuffix
 
             mainFiles
             |> Seq.exists (fun x -> x.Name.Contains(fileName))
             |> not
         
-        // skip checking if no main files found
         let orphans = 
-            if Seq.isEmpty mainFiles then extraFiles
-            else extraFiles |> Seq.filter hasNoCorrespondingMainFile
+            if Seq.isEmpty mainFiles then 
+                extraFiles
+            else 
+                extraFiles |> Seq.filter hasNoCorrespondingMainFile
         
         orphans |> Seq.map (fun x -> x.FullName)
     
     /// Get list of files from all subdirectories
-    let private getSubDirectoryFiles (subdirectories : seq<string>) = 
+    let private getSubDirectoryFiles (subdirectories : seq<string>) : CleanerResult<seq<string>> = 
         let getOrphansPerDirectory = 
             getFilesList
             >> filterLocalFolderImageFiles
@@ -261,53 +215,33 @@ module TV =
             |> Seq.map getOrphansPerDirectory
             |> Seq.concat
         
-        if (Seq.isEmpty orphans) then fail FilesNotFound
-        else succeed orphans
+        if Seq.isEmpty orphans then 
+            Error FilesNotFound
+        else 
+            Ok orphans
     
-    let cleanDirectory (path : string) (preview : bool) = 
+    let cleanDirectory (path : string) (preview : bool) : CleanerResult<seq<string>> = 
         let logFilePath = Path.Combine(path, logFileName)
         let log = Logging.logListToFile logFilePath
         
-        let action = 
-            path
-            |> pathExists
-            |> bindR getAllDirectoriesList
-            |> bindR filterDirectoriesByLeafNodes
-            |> bindR getSubDirectoryFiles
-        // if preview, don't log and delete
-        match preview with
-        | true -> action
-        | false -> 
-            action
-            |> successTee (fun (x, _) -> log x)
-            |> successTee (fun (x, _) -> deleteFiles x)
+        pathExists path
+        |> Result.bind getAllDirectoriesList
+        |> Result.bind filterDirectoriesByLeafNodes
+        |> Result.bind getSubDirectoryFiles
+        |> Result.map (fun toDelete ->
+            if not preview then
+                log toDelete
+                deleteFiles toDelete
+            toDelete)
 
 //-------------------------------------------------------------------
 /// Music
-(* 
-Music folder may contain 
-1. audio files by album or directly within folder (large size)
-2. artwork files (small size)
-
-If files sized below threshold do not have a known name or extension, delete them
-
-Music files are expected to be in leaf nodes.
-Expected folder structure:
-
-Music
-   |----Artist
-   |       |----Album
-   |            |--Files
-   |----Artist
-   |       |--Files
-
-*)
 module Music = 
     [<Literal>]
     let thresholdFileSize = 500L<kB>
     
-    /// Get list of extra files with no corresponding main file
-    let private hasOrphanFiles (listFiles : Collections.Generic.IEnumerable<FileInfo>) = 
+    /// Check if directory has orphan files (no main audio files)
+    let private hasOrphanFiles (listFiles : seq<FileInfo>) = 
         let isMainFile (file : FileInfo) = 
             let sizeGreaterThanThreshold = 
                 let fileSize = file.Length |> int64ToKB
@@ -317,39 +251,30 @@ module Music =
                 let fileExtension = Path.GetExtension file.Name
                 filesAudio |> Seq.exists (fun x -> x = fileExtension)
             
-            if (sizeGreaterThanThreshold || extensionIsAudio) then true
-            else false
+            sizeGreaterThanThreshold || extensionIsAudio
         
-        let isExtraFile = isMainFile >> not
-        let hasMainFiles = listFiles |> Seq.exists (isMainFile)
-        let hasExtraFiles = listFiles |> Seq.exists (isExtraFile)
-        
-        match hasMainFiles, hasExtraFiles with
-        | false, _ -> true
-        | _, _ -> false
+        let hasMainFiles = listFiles |> Seq.exists isMainFile
+        not hasMainFiles
     
-    let private filterDirectoriesWithoutMainFiles (subdirectories : seq<string>) = 
+    let private filterDirectoriesWithoutMainFiles (subdirectories : seq<string>) : CleanerResult<seq<string>> = 
         let getOrphanedDirectory = getFilesList >> hasOrphanFiles
+        let orphans = subdirectories |> Seq.filter getOrphanedDirectory
         
-        let orphans = subdirectories |> Seq.filter (getOrphanedDirectory)
-        
-        if (Seq.isEmpty orphans) then fail SubdirectoriesBelowThresholdDoNotExist
-        else succeed orphans
+        if Seq.isEmpty orphans then 
+            Error SubdirectoriesBelowThresholdDoNotExist
+        else 
+            Ok orphans
     
-    let cleanDirectory (path : string) (preview : bool) = 
+    let cleanDirectory (path : string) (preview : bool) : CleanerResult<seq<string>> = 
         let logFilePath = Path.Combine(path, logFileName)
         let log = Logging.logListToFile logFilePath
         
-        let action = 
-            path
-            |> pathExists
-            |> bindR getAllDirectoriesList
-            |> bindR filterDirectoriesByLeafNodes
-            |> bindR filterDirectoriesWithoutMainFiles
-        // if preview, don't log and delete
-        match preview with
-        | true -> action
-        | false -> 
-            action
-            |> successTee (fun (x, _) -> log x)
-            |> successTee (fun (x, _) -> deleteFolders x)
+        pathExists path
+        |> Result.bind getAllDirectoriesList
+        |> Result.bind filterDirectoriesByLeafNodes
+        |> Result.bind filterDirectoriesWithoutMainFiles
+        |> Result.map (fun toDelete ->
+            if not preview then
+                log toDelete
+                deleteFolders toDelete
+            toDelete)

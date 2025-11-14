@@ -9,7 +9,6 @@
 
   <ItemGroup>
     <Compile Include="Utility.fs" />
-    <Compile Include="ROP.fs" />
     <Compile Include="App.fs" />
     <Compile Include="Size.fs" />
     <Compile Include="Logging.fs" />

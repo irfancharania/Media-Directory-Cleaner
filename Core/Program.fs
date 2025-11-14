@@ -1,5 +1,4 @@
 ﻿open System
-open ROP
 open Directory
 open FSharp.ConsoleApp
 
@@ -9,8 +8,6 @@ let handler f =
         try 
             printfn ""
             f args
-            // pause for debug
-            // System.Console.ReadKey() |> ignore
             0
         with e -> 
             printfn "Error: %s" e.Message
@@ -21,7 +18,7 @@ module Usage =
     ///Prints the usage to the console
     let print() = 
         printfn "Usage:"
-        printfn "  example <command> [--<flag> ...] [-<setting> value ...]"
+        printfn "  DirectoryCleaner.exe <command> [--<flag> ...] [-<setting> value ...]"
         printfn ""
         printfn "Commands:"
         printfn "  tv -path <TV Shows path> [--preview]"
@@ -44,15 +41,18 @@ module Cleaner =
         handler (fun args -> 
             let path = App.tryGetSetting PathKey args
             let preview = App.isFlagged PreviewFlag args
-            match path, preview with
-            | Some path, preview -> 
-                let result = f path preview |> mapMessagesR Directory.convertFailureMessage
-                match result with
-                | Success(x, _) -> x |> Seq.iter (fun y -> printfn "%s" y)
-                | Failure x -> 
-                    let err = x |> Seq.fold (+) ""
-                    if err <> "" then failwith err
-            | _ -> Usage.print())
+            
+            match path with
+            | Some path -> 
+                match f path preview with
+                | Ok items -> 
+                    items |> Seq.iter (printfn "%s")
+                | Error error -> 
+                    let errorMsg = Directory.convertFailureMessage error
+                    if errorMsg <> "" then 
+                        failwith errorMsg
+            | None -> 
+                Usage.print())
     
     let execTV = exec Directory.TV.cleanDirectory
     let execMovies = exec Directory.Movies.cleanDirectory
@@ -72,6 +72,8 @@ module Commands =
 ///Application entry point
 [<EntryPoint>]
 let main argv = 
-    App.run Usage.exec [ (Commands.TV, Cleaner.execTV)
-                         (Commands.Movies, Cleaner.execMovies)
-                         (Commands.Music, Cleaner.execMusic) ] argv
+    App.run Usage.exec 
+        [ (Commands.TV, Cleaner.execTV)
+          (Commands.Movies, Cleaner.execMovies)
+          (Commands.Music, Cleaner.execMusic) ] 
+        argv

@@ -3,7 +3,6 @@
 open System
 open System.IO
 open Utility
-open ROP
 
 let getCurrentDateTime() = 
     let format = "yyyy-MMM-dd HH:mm:ss"
