@@ -1,4 +1,5 @@
 ﻿open System
+open Domain
 open Directory
 open FSharp.ConsoleApp
 
@@ -40,23 +41,24 @@ module Cleaner =
     let private exec f = 
         handler (fun args -> 
             let path = App.tryGetSetting PathKey args
-            let preview = App.isFlagged PreviewFlag args
+            let previewFlag = App.isFlagged PreviewFlag args
+            let previewMode = if previewFlag then Domain.Preview else Domain.Execute
             
             match path with
             | Some path -> 
-                match f path preview with
+                match f path previewMode with
                 | Ok items -> 
                     items |> Seq.iter (printfn "%s")
                 | Error error -> 
-                    let errorMsg = Directory.convertFailureMessage error
-                    if errorMsg <> "" then 
-                        failwith errorMsg
+                    match Domain.DomainError.toOptionalMessage error with
+                    | Some msg -> failwith msg
+                    | None -> () // Silent for non-critical errors
             | None -> 
                 Usage.print())
     
-    let execTV = exec Directory.TV.cleanDirectory
-    let execMovies = exec Directory.Movies.cleanDirectory
-    let execMusic = exec Directory.Music.cleanDirectory
+    let execTV = exec Directory.TV.clean
+    let execMovies = exec Directory.Movies.clean
+    let execMusic = exec Directory.Music.clean
 
 ///Contains literals of commands
 module Commands = 
