@@ -8,8 +8,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="Utility.fs" />
     <Compile Include="Size.fs" />
+    <Compile Include="Utility.fs" />
     <Compile Include="Domain.fs" />
     <Compile Include="Logging.fs" />
     <Compile Include="App.fs" />

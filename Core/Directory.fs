@@ -6,6 +6,7 @@ open System.Text.RegularExpressions
 open FsToolkit.ErrorHandling
 open Domain
 open Utility
+open Size
 
 [<Literal>]
 let logFileName = "cleanLog.log"
@@ -41,11 +42,9 @@ let getFiles (path: string) : seq<ExistingFile> =
     |> Seq.map ExistingFile.fromFileInfo
 
 /// Calculate total size of files in directory (MB)
-let getDirectorySizeMB (path: string) : float =
+let getDirectorySizeMB (path: string) : int64<MB> =
     getFiles path
-    |> Seq.sumBy (fun f -> f.SizeInBytes)
-    |> float
-    |> fun bytes -> bytes / 1024.0 / 1024.0
+    |> Seq.sumBy ExistingFile.sizeInMB
 
 /// Check if a directory is a leaf node (has no subdirectories)
 let isLeafNode (path: string) : bool =
@@ -91,8 +90,7 @@ let deleteFiles (paths: seq<string>) : Result<unit, CleaningError> =
 // ============================================================================
 
 module Movies =
-    [<Literal>]
-    let ThresholdSizeMB = 100.0
+    let ThresholdSizeMB = 100L<MB>
     
     /// Filter directories that are below the size threshold
     let filterBySize (directories: seq<string>) : Result<seq<string>, CleaningError> =
@@ -132,8 +130,7 @@ module Movies =
 // ============================================================================
 
 module TV =
-    [<Literal>]
-    let ThresholdSizeMB = 100.0
+    let ThresholdSizeMB = 100L<MB>
     
     /// Partition files into main files (videos) and extra files
     let partitionFiles (files: seq<ExistingFile>) =
@@ -229,8 +226,7 @@ module TV =
 // ============================================================================
 
 module Music =
-    [<Literal>]
-    let ThresholdSizeKB = 500.0
+    let ThresholdSizeKB = 500L<kB>
     
     /// Check if directory has any main audio files
     let hasAudioFiles (path: string) : bool =

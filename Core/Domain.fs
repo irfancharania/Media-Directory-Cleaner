@@ -3,6 +3,7 @@ module Domain
 open System
 open System.IO
 open FsToolkit.ErrorHandling
+open Size
 
 // ============================================================================
 // Domain Types - Making illegal states unrepresentable
@@ -16,7 +17,7 @@ type ExistingFile =
     { FullPath: string
       Name: string
       Extension: string
-      SizeInBytes: int64 }
+      SizeInBytes: int64<byte> }
 
 /// A directory that exists on disk
 type ExistingDirectory =
@@ -96,15 +97,15 @@ module ExistingFile =
         { FullPath = fileInfo.FullName
           Name = fileInfo.Name
           Extension = fileInfo.Extension.ToLowerInvariant()
-          SizeInBytes = fileInfo.Length }
+          SizeInBytes = Size.int64ToBytes fileInfo.Length }
     
     /// Get size in megabytes
-    let sizeInMB file =
-        float file.SizeInBytes / 1024.0 / 1024.0
+    let sizeInMB (file: ExistingFile) : int64<MB> =
+        file.SizeInBytes |> Size.bytesToMegaBytes
     
     /// Get size in kilobytes
-    let sizeInKB file =
-        float file.SizeInBytes / 1024.0
+    let sizeInKB (file: ExistingFile) : int64<kB> =
+        file.SizeInBytes |> Size.bytesToKiloBytes
     
     /// Classify the media type based on extension
     let classifyMediaType file =
@@ -170,13 +171,13 @@ module DomainError =
 module FilePatterns =
     
     /// Check if file is a video file by size or extension
-    let (|VideoFile|_|) (thresholdMB: float) (file: ExistingFile) =
+    let (|VideoFile|_|) (thresholdMB: int64<MB>) (file: ExistingFile) =
         let isLargeEnough = ExistingFile.sizeInMB file > thresholdMB
         let isVideoExtension = ExistingFile.classifyMediaType file = Video
         if isLargeEnough || isVideoExtension then Some file else None
     
     /// Check if file is an audio file by size or extension
-    let (|AudioFile|_|) (thresholdKB: float) (file: ExistingFile) =
+    let (|AudioFile|_|) (thresholdKB: int64<kB>) (file: ExistingFile) =
         let isLargeEnough = ExistingFile.sizeInKB file > thresholdKB
         let isAudioExtension = ExistingFile.classifyMediaType file = Audio
         if isLargeEnough || isAudioExtension then Some file else None
