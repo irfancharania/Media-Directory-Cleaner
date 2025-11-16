@@ -2,7 +2,6 @@ module FileSystem
 
 open System
 open System.IO
-open FsToolkit.ErrorHandling
 open Domain
 open Size
 
@@ -13,7 +12,7 @@ let logFileName = "cleanLog.log"
 // Core Directory Operations
 // ============================================================================
 
-/// Get all subdirectories, filtering out special directories (starting with .)
+/// Get all subdirectories, filtering out special directories 
 let getSubdirectories (searchOption: SearchOption) (path: ValidatedPath) 
     : Result<seq<ExistingDirectory>, DirectoryError> =
     try

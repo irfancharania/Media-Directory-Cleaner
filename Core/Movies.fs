@@ -1,5 +1,6 @@
 module Movies
 
+open System
 open System.IO
 open FsToolkit.ErrorHandling
 open Domain
@@ -23,7 +24,8 @@ let private filterDirectoriesBySize (directories: seq<string>) : Result<seq<stri
 /// Check if directory should be skipped (optimization)
 /// Dot-prefixed directories' fate is determined by parent folder
 let private shouldSkipDirectory (dirInfo: DirectoryInfo) : bool =
-    dirInfo.Name.StartsWith(".")
+    dirInfo.Name.StartsWith(".") || 
+    String.Equals(dirInfo.Name, "extrafanart", StringComparison.OrdinalIgnoreCase)
 
 /// Find non-English subtitle files in directories
 /// Optimized: Skip subdirectories like .actors and extrafanart
