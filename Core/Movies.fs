@@ -1,4 +1,4 @@
-module Movies
+﻿module Movies
 
 open System
 open System.IO
@@ -9,101 +9,84 @@ open Size
 
 let ThresholdSizeMB = 100L<MB>
 
-/// Filter directories that are below the size threshold
-let private filterDirectoriesBySize (directories: seq<string>) : Result<seq<string>, CleaningError> =
-    let smallDirs =
-        directories
-        |> Seq.filter (fun path -> getDirectorySizeMB path < ThresholdSizeMB)
-        |> Seq.toList
-    
-    if List.isEmpty smallDirs then
-        Error (NothingToClean "No directories below size threshold")
-    else
-        Ok smallDirs
+/// Check if directory has any video files
+let private hasVideoFiles (path: string) : bool =
+    getFiles path
+    |> Seq.exists (fun file ->
+        match file with
+        | VideoFile ThresholdSizeMB _ -> true
+        | _ -> false)
 
-/// Check if directory should be skipped (optimization)
-/// Dot-prefixed directories' fate is determined by parent folder
-let private shouldSkipDirectory (dirInfo: DirectoryInfo) : bool =
-    dirInfo.Name.StartsWith(".") || 
-    String.Equals(dirInfo.Name, "extrafanart", StringComparison.OrdinalIgnoreCase)
+/// Filter directories that are below size threshold and have no video files
+let private filterSmallDirectoriesWithoutVideo (directories: seq<string>) : seq<string> =
+    directories
+    |> Seq.filter (fun path -> 
+        getDirectorySizeMB path < ThresholdSizeMB && not (hasVideoFiles path))
 
-/// Find non-English subtitle files in directories
-/// Optimized: Skip subdirectories like .actors and extrafanart
+/// Find non-English subtitle files in all directories
+/// Only search top-level directory, skip .actors and extrafanart as they'll be deleted with parent
 let private findNonEnglishSubtitles (directories: seq<string>) : seq<string> =
     directories
     |> Seq.collect (fun dir ->
-        // Get files from current directory
-        let currentFiles = getFiles dir
-        
-        // Get subdirectories, but filter out ones we should skip
-        let subDirs = 
-            try
-                DirectoryInfo(dir).EnumerateDirectories("*", SearchOption.TopDirectoryOnly)
-                |> Seq.filter (shouldSkipDirectory >> not)
-                |> Seq.collect (fun subDir -> getFiles subDir.FullName)
-            with
-            | _ -> Seq.empty
-        
-        Seq.append currentFiles subDirs)
-    |> Seq.filter Subtitle.isSubtitleFile
-    |> Seq.filter (fun file -> Subtitle.isNonEnglish file.Name)
-    |> Seq.map (fun file -> file.FullPath)
+        getFiles dir
+        |> Seq.filter Subtitle.isSubtitleFile
+        |> Seq.filter (fun file -> Subtitle.isNonEnglish file.Name)
+        |> Seq.map (fun file -> file.FullPath))
 
-/// Clean movie directories - delete small folders and non-English subtitles
+/// Clean movie directories - delete small folders without video and non-English subtitles
+/// Runs iteratively: metadata deletion → empty folder deletion on next run
 let clean (path: string) (previewMode: PreviewMode) 
     : Result<seq<string>, DomainError> =
     
     let logFilePath = Path.Combine(path, logFileName)
     let isExecute = (previewMode = Execute)
     
-    // Get directories to delete
-    let foldersResult =
+    // Get all leaf directories
+    let leafDirsResult =
         ValidatedPath.create path 
         |> Result.liftValidationError
         |> Result.bind (getAllSubdirectories >> Result.liftDirectoryError)
         |> Result.bind (filterToLeafNodes >> Result.liftDirectoryError)
-        |> Result.bind (filterDirectoriesBySize >> Result.liftCleaningError)
     
-    match foldersResult with
-    | Ok foldersToDelete ->
-        // Also find non-English subtitles in ALL directories (not just small ones)
-        let allDirsResult =
-            ValidatedPath.create path
-            |> Result.liftValidationError
-            |> Result.bind (getAllSubdirectories >> Result.liftDirectoryError)
-            |> Result.bind (filterToLeafNodes >> Result.liftDirectoryError)
+    match leafDirsResult with
+    | Ok leafDirs ->
+        // Find small folders without video (orphaned metadata folders)
+        let foldersToDelete = 
+            filterSmallDirectoriesWithoutVideo leafDirs
+            |> Seq.toList
         
-        let subtitlesToDelete =
-            match allDirsResult with
-            | Ok allDirs -> findNonEnglishSubtitles allDirs
-            | Error _ -> Seq.empty
+        // Find non-English subtitles in all leaf directories
+        // (folders being deleted will include their subtitles anyway)
+        let subtitlesToDelete = 
+            findNonEnglishSubtitles leafDirs
+            |> Seq.toList
         
-        // Combine folders and subtitle files
-        let allItemsToDelete = Seq.append foldersToDelete subtitlesToDelete
+        // Combine all items
+        let allItemsToDelete = List.append foldersToDelete subtitlesToDelete
         
-        if isExecute then
-            // Log everything
-            Logging.logListToFile logFilePath allItemsToDelete
-            
-            // Delete folders
-            let folderResult = 
-                deleteDirectories foldersToDelete 
-                |> Result.liftCleaningError
-            
-            // Delete subtitle files
-            let subtitleResult =
-                if Seq.isEmpty subtitlesToDelete then
-                    Ok ()
-                else
-                    deleteFiles subtitlesToDelete
-                    |> Result.liftCleaningError
-            
-            // Combine results
-            match folderResult, subtitleResult with
-            | Ok _, Ok _ -> Ok allItemsToDelete
-            | Error e, _ -> Error e
-            | _, Error e -> Error e
+        if List.isEmpty allItemsToDelete then
+            Error (DomainError.CleaningError (NothingToClean "No orphaned folders or non-English subtitles found"))
         else
-            Ok allItemsToDelete
+            if isExecute then
+                // Log everything
+                Logging.logListToFile logFilePath allItemsToDelete
+                
+                // Delete folders
+                let folderResult = 
+                    if List.isEmpty foldersToDelete then Ok ()
+                    else deleteDirectories foldersToDelete |> Result.liftCleaningError
+                
+                // Delete subtitle files
+                let subtitleResult =
+                    if List.isEmpty subtitlesToDelete then Ok ()
+                    else deleteFiles subtitlesToDelete |> Result.liftCleaningError
+                
+                // Combine results
+                match folderResult, subtitleResult with
+                | Ok _, Ok _ -> Ok allItemsToDelete
+                | Error e, _ -> Error e
+                | _, Error e -> Error e
+            else
+                Ok allItemsToDelete
     
     | Error e -> Error e

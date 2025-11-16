@@ -12,6 +12,11 @@ let logFileName = "cleanLog.log"
 // Core Directory Operations
 // ============================================================================
 
+/// Check if directory should be ignored (starts with "." or is "extrafanart")
+let private shouldIgnoreDirectory (dirInfo: DirectoryInfo) : bool =
+    dirInfo.Name.StartsWith(".") || 
+    String.Equals(dirInfo.Name, "extrafanart", StringComparison.OrdinalIgnoreCase)
+
 /// Get all subdirectories, filtering out special directories 
 let getSubdirectories (searchOption: SearchOption) (path: ValidatedPath) 
     : Result<seq<ExistingDirectory>, DirectoryError> =
@@ -19,7 +24,7 @@ let getSubdirectories (searchOption: SearchOption) (path: ValidatedPath)
         let pathStr = ValidatedPath.value path
         let directories = 
             DirectoryInfo(pathStr).EnumerateDirectories("*.*", searchOption)
-            |> Seq.filter (fun di -> not (di.Name.StartsWith(".")))
+            |> Seq.filter (shouldIgnoreDirectory >> not)
             |> Seq.map ExistingDirectory.fromDirectoryInfo
         
         if Seq.isEmpty directories then
@@ -38,19 +43,19 @@ let getFiles (path: string) : seq<ExistingFile> =
     DirectoryInfo(path).EnumerateFiles("*", SearchOption.TopDirectoryOnly)
     |> Seq.map ExistingFile.fromFileInfo
 
-/// Calculate total size of files in directory (MB)
+/// Calculate total size of files in directory (MB) - top level only
 let getDirectorySizeMB (path: string) : int64<MB> =
     getFiles path
     |> Seq.sumBy ExistingFile.sizeInMB
 
-/// Check if a directory is a leaf node (has no subdirectories)
+/// Check if a directory is a leaf node (has no non-special subdirectories)
 let isLeafNode (path: string) : bool =
     match ValidatedPath.create path with
     | Error _ -> false
     | Ok validPath ->
         match getTopSubdirectories validPath with
-        | Ok _ -> false
-        | Error _ -> true
+        | Ok subdirs -> Seq.isEmpty subdirs  // If we got subdirs after filtering, it's not a leaf
+        | Error _ -> true  // No subdirs means it's a leaf
 
 /// Filter directories to only leaf nodes
 let filterToLeafNodes (directories: seq<ExistingDirectory>) 

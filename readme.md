@@ -191,10 +191,12 @@ Logs include:
 
 ## Notes
 
-> - Directories starting with `.` are ignored (e.g., `.actors`)
+> - Directories starting with `.` (like `.actors`) and `extrafanart` are **ignored** when determining leaf nodes and calculating sizes
+> - These special directories are preserved with valid movies and deleted with orphaned movies
 > - Preview mode is the default. Use `--execute` to actually delete
 > - When in doubt, files are kept (conservative approach)
 > - Subtitle language detection uses ISO 639-2/3 language codes
+> - **Iterative cleaning**: The tool runs as a scheduled job. Metadata deletion in one run may leave empty folders that get cleaned in the next run
 
 ## Supported Subtitle Languages
 

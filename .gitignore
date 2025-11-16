@@ -231,3 +231,4 @@ $RECYCLE.BIN/
 *.lnk
 
 .vs/
+Core/Properties/launchSettings.json
