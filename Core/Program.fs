@@ -1,81 +1,113 @@
 ﻿open System
+open Argu
 open Domain
-open Directory
-open FSharp.ConsoleApp
 
-///Convert a function to a console application handler e.g. - returns 0 for success or 1 for errors.
-let handler f = 
-    fun args -> 
-        try 
-            printfn ""
-            f args
-            0
-        with e -> 
-            printfn "Error: %s" e.Message
+// ============================================================================
+// CLI Argument Definitions using Argu
+// ============================================================================
+
+type CleanCommand =
+    | [<Mandatory>] [<AltCommandLine("-p")>] Path of path:string
+    | [<AltCommandLine("--execute")>] Execute
+    
+    interface IArgParserTemplate with
+        member this.Usage =
+            match this with
+            | Path _ -> "specify the directory path to clean"
+            | Execute -> "execute mode - actually delete items (default is preview only)"
+
+type CliArguments =
+    | [<CliPrefix(CliPrefix.None)>] Tv of ParseResults<CleanCommand>
+    | [<CliPrefix(CliPrefix.None)>] Movies of ParseResults<CleanCommand>
+    | [<CliPrefix(CliPrefix.None)>] Music of ParseResults<CleanCommand>
+    | [<Hidden>] [<AltCommandLine("-v", "--version")>] Version
+    
+    interface IArgParserTemplate with
+        member this.Usage =
+            match this with
+            | Tv _ -> "clean TV show directories"
+            | Movies _ -> "clean movie directories"
+            | Music _ -> "clean music directories"
+            | Version -> "display version information"
+
+// ============================================================================
+// Application Logic
+// ============================================================================
+
+let runClean (cleanFn: string -> PreviewMode -> Result<seq<string>, DomainError>) 
+             (results: ParseResults<CleanCommand>) =
+    let path = results.GetResult(CleanCommand.Path)
+    let previewMode = 
+        if results.Contains(CleanCommand.Execute) then 
+            Domain.Execute 
+        else 
+            Domain.Preview  // Preview is now the DEFAULT
+    
+    match cleanFn path previewMode with
+    | Ok items ->
+        if Seq.isEmpty items then
+            printfn "No items to clean."
+        else
+            if previewMode = Domain.Preview then
+                printfn "PREVIEW MODE - Nothing will be deleted. Use --execute to actually delete."
+                printfn ""
+            printfn "Items processed:"
+            items |> Seq.iter (printfn "  %s")
+        0
+    | Error error ->
+        match Domain.DomainError.toOptionalMessage error with
+        | Some msg -> 
+            eprintfn "Error: %s" msg
             1
+        | None -> 
+            printfn "Nothing to clean."
+            0
 
-///Contains a handler that prints the application usage
-module Usage = 
-    ///Prints the usage to the console
-    let print() = 
-        printfn "Usage:"
-        printfn "  DirectoryCleaner.exe <command> [--<flag> ...] [-<setting> value ...]"
-        printfn ""
-        printfn "Commands:"
-        printfn "  tv -path <TV Shows path> [--preview]"
-        printfn "  movies -path <Movies path> [--preview]"
-        printfn "  music -path <Music path> [--preview]"
-    
-    ///A handler which prints the usage to the console
-    let exec = handler (fun _ -> print())
+let printVersion() =
+    let version = Reflection.Assembly.GetExecutingAssembly().GetName().Version
+    printfn "DirectoryCleaner v%A" version
+    0
 
-module Cleaner = 
-    ///The key used for the folder path setting
-    [<Literal>]
-    let PathKey = "path"
-    
-    ///The key used for the preview flag
-    [<Literal>]
-    let PreviewFlag = "preview"
-    
-    let private exec f = 
-        handler (fun args -> 
-            let path = App.tryGetSetting PathKey args
-            let previewFlag = App.isFlagged PreviewFlag args
-            let previewMode = if previewFlag then Domain.Preview else Domain.Execute
-            
-            match path with
-            | Some path -> 
-                match f path previewMode with
-                | Ok items -> 
-                    items |> Seq.iter (printfn "%s")
-                | Error error -> 
-                    match Domain.DomainError.toOptionalMessage error with
-                    | Some msg -> failwith msg
-                    | None -> () // Silent for non-critical errors
-            | None -> 
-                Usage.print())
-    
-    let execTV = exec Directory.TV.clean
-    let execMovies = exec Directory.Movies.clean
-    let execMusic = exec Directory.Music.clean
+// ============================================================================
+// Entry Point
+// ============================================================================
 
-///Contains literals of commands
-module Commands = 
-    [<Literal>]
-    let TV = "tv"
-    
-    [<Literal>]
-    let Movies = "movies"
-
-    [<Literal>]
-    let Music = "music"
-
-///Application entry point
 [<EntryPoint>]
-let main argv = 
-    App.run Usage.exec 
-        [ (Commands.TV, Cleaner.execTV)
-          (Commands.Movies, Cleaner.execMovies)
-          (Commands.Music, Cleaner.execMusic) ] 
-        argv
+let main argv =
+    let errorHandler = ProcessExiter(colorizer = function ErrorCode.HelpText -> None | _ -> Some ConsoleColor.Red)
+    let parser = ArgumentParser.Create<CliArguments>(programName = "DirectoryCleaner.exe", errorHandler = errorHandler)
+    
+    // If no arguments, show usage and exit
+    if argv.Length = 0 then
+        printfn "%s" (parser.PrintUsage())
+        0
+    else
+        try
+            let results = parser.ParseCommandLine(inputs = argv, raiseOnUsage = true)
+            
+            // Handle version flag
+            if results.Contains(Version) then
+                printVersion()
+            // Handle subcommands
+            elif results.Contains(Tv) then
+                let tvResults = results.GetResult(Tv)
+                runClean TVShows.clean tvResults
+            elif results.Contains(Movies) then
+                let moviesResults = results.GetResult(Movies)
+                runClean Movies.clean moviesResults
+            elif results.Contains(Music) then
+                let musicResults = results.GetResult(Music)
+                runClean Music.clean musicResults
+            else
+                // No valid command provided, show usage
+                printfn "Error: You must specify one of: tv, movies, or music"
+                printfn ""
+                printfn "%s" (parser.PrintUsage())
+                1
+        with
+        | :? ArguParseException as ex ->
+            printfn "%s" ex.Message
+            1
+        | ex ->
+            eprintfn "Unexpected error: %s" ex.Message
+            1

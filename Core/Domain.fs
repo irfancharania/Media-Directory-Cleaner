@@ -128,6 +128,84 @@ module ExistingDirectory =
         dir.Name.StartsWith(".")
 
 // ============================================================================
+// Subtitle Language Detection
+// ============================================================================
+
+module Subtitle =
+    
+    /// ISO 639-2/3 language codes that are NOT English
+    /// Source: https://www.opensubtitles.org/
+    let private nonEnglishLanguageCodes = [
+        // Common European languages
+        "ara"; "baq"; "cat"; "cze"; "dan"; "dut"; "fin"; "fre"; "ger"; "glg"
+        "gre"; "hun"; "ita"; "nor"; "pol"; "por"; "rum"; "spa"; "swe"; "tur"
+        // Asian languages
+        "chi"; "jpn"; "kor"; "tha"; "vie"; "hin"; "kan"; "mal"; "tam"; "tel"
+        // Other languages
+        "rus"; "ukr"; "heb"; "per"; "bul"; "hrv"; "slv"; "srp"; "est"; "lav"
+        "lit"; "ice"; "alb"; "arm"; "geo"; "mac"; "slo"; "bos"; "may"; "ind"
+    ]
+    
+    /// English language indicators
+    let private englishIndicators = [
+        "english"; "eng"; "en"; "sdh"; "hi"; "cc"  // SDH = Subtitles for Deaf/Hard of hearing, HI = Hearing Impaired, CC = Closed Captions
+    ]
+    
+    /// Check if filename contains any non-English language code
+    let private containsNonEnglishCode (filename: string) =
+        let lower = filename.ToLowerInvariant()
+        nonEnglishLanguageCodes
+        |> List.exists (fun code -> 
+            // Match patterns: .code., _code_, .code.srt, _code.srt, code.srt (at start)
+            lower.Contains($".{code}.") || 
+            lower.Contains($"_{code}_") || 
+            lower.Contains($".{code}_") || 
+            lower.Contains($"_{code}.") || 
+            lower.Contains($"-{code}.") ||
+            lower.Contains($"-{code}_") ||
+            lower.EndsWith($".{code}.srt") ||
+            lower.EndsWith($"_{code}.srt") ||
+            lower.EndsWith($".{code}.sub") ||
+            lower.EndsWith($"_{code}.sub") ||
+            lower = $"{code}.srt" ||
+            lower = $"{code}.sub")
+    
+    /// Check if filename explicitly indicates English
+    let private containsEnglishIndicator (filename: string) =
+        let lower = filename.ToLowerInvariant()
+        englishIndicators
+        |> List.exists (fun indicator -> 
+            // Match patterns: .indicator., _indicator_, etc.
+            lower.Contains($".{indicator}.") || 
+            lower.Contains($"_{indicator}_") || 
+            lower.Contains($".{indicator}_") || 
+            lower.Contains($"_{indicator}.") || 
+            lower.Contains($"-{indicator}.") ||
+            lower.Contains($"-{indicator}_") ||
+            lower.StartsWith($"{indicator}.") ||
+            lower.StartsWith($"{indicator}_") ||
+            lower = $"{indicator}.srt" ||
+            lower = $"{indicator}.sub")
+    
+    /// Determine if a subtitle file is NOT English and should be deleted
+    /// Returns true if we're confident it's NOT English
+    /// Returns false if it's English OR we're uncertain (err on the side of caution)
+    let isNonEnglish (filename: string) : bool =
+        let hasEnglishIndicator = containsEnglishIndicator filename
+        let hasNonEnglishCode = containsNonEnglishCode filename
+        
+        match hasEnglishIndicator, hasNonEnglishCode with
+        | true, _ -> false      // Explicitly English - keep it
+        | false, true -> true   // Has non-English code - delete it
+        | false, false -> false // Uncertain - keep it (safe default)
+    
+    /// Check if file is a subtitle by extension
+    let isSubtitleFile (file: ExistingFile) : bool =
+        match file.Extension with
+        | ".srt" | ".sub" | ".sbv" | ".ass" | ".ssa" | ".vtt" -> true
+        | _ -> false
+
+// ============================================================================
 // Error Formatting
 // ============================================================================
 
