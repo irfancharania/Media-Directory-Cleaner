@@ -3,31 +3,26 @@ open Argu
 open Domain
 
 // ============================================================================
-// CLI Argument Definitions using Argu
+// CLI Argument Definitions using Argu (Simplified)
 // ============================================================================
 
-type CleanCommand =
+type CleanMode =
+    | Tv
+    | Movies
+    | Music
+
+type CliArguments =
     | [<Mandatory>] [<AltCommandLine("-p")>] Path of path:string
-    | [<AltCommandLine("--execute")>] Execute
+    | [<Mandatory>] [<AltCommandLine("-m")>] Mode of mode:CleanMode
+    | Execute
+    | [<AltCommandLine("-v")>] Version
     
     interface IArgParserTemplate with
         member this.Usage =
             match this with
             | Path _ -> "specify the directory path to clean"
+            | Mode _ -> "cleaning mode: tv, movies, or music"
             | Execute -> "execute mode - actually delete items (default is preview only)"
-
-type CliArguments =
-    | [<CliPrefix(CliPrefix.None)>] Tv of ParseResults<CleanCommand>
-    | [<CliPrefix(CliPrefix.None)>] Movies of ParseResults<CleanCommand>
-    | [<CliPrefix(CliPrefix.None)>] Music of ParseResults<CleanCommand>
-    | [<Hidden>] [<AltCommandLine("-v", "--version")>] Version
-    
-    interface IArgParserTemplate with
-        member this.Usage =
-            match this with
-            | Tv _ -> "clean TV show directories"
-            | Movies _ -> "clean movie directories"
-            | Music _ -> "clean music directories"
             | Version -> "display version information"
 
 // ============================================================================
@@ -35,14 +30,8 @@ type CliArguments =
 // ============================================================================
 
 let runClean (cleanFn: string -> PreviewMode -> Result<seq<string>, DomainError>) 
-             (results: ParseResults<CleanCommand>) =
-    let path = results.GetResult(CleanCommand.Path)
-    let previewMode = 
-        if results.Contains(CleanCommand.Execute) then 
-            Domain.Execute 
-        else 
-            Domain.Preview  // Preview is now the DEFAULT
-    
+             (path: string)
+             (previewMode: PreviewMode) =
     match cleanFn path previewMode with
     | Ok items ->
         if Seq.isEmpty items then
@@ -88,22 +77,24 @@ let main argv =
             // Handle version flag
             if results.Contains(Version) then
                 printVersion()
-            // Handle subcommands
-            elif results.Contains(Tv) then
-                let tvResults = results.GetResult(Tv)
-                runClean TVShows.clean tvResults
-            elif results.Contains(Movies) then
-                let moviesResults = results.GetResult(Movies)
-                runClean Movies.clean moviesResults
-            elif results.Contains(Music) then
-                let musicResults = results.GetResult(Music)
-                runClean Music.clean musicResults
             else
-                // No valid command provided, show usage
-                printfn "Error: You must specify one of: tv, movies, or music"
-                printfn ""
-                printfn "%s" (parser.PrintUsage())
-                1
+                // Get required arguments
+                let path = results.GetResult(Path)
+                let mode = results.GetResult(Mode)
+                let previewMode = 
+                    if results.Contains(Execute) then 
+                        Domain.Execute 
+                    else 
+                        Domain.Preview
+                
+                // Select cleaning function based on mode
+                let cleanFn = 
+                    match mode with
+                    | Tv -> TVShows.clean
+                    | Movies -> Movies.clean
+                    | Music -> Music.clean
+                
+                runClean cleanFn path previewMode
         with
         | :? ArguParseException as ex ->
             printfn "%s" ex.Message
