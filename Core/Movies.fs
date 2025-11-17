@@ -21,27 +21,67 @@ let private filterDirectoriesBySize (directories: seq<string>) : Result<seq<stri
     else
         Ok smallDirs
 
-/// Find subtitle files to delete (non-English, non-French) in directories
-/// Optimized: Skip subdirectories like .actors and extrafanart
-let private findSubtitlesToDelete (directories: seq<string>) : seq<string> =
-    directories
-    |> Seq.collect (fun dir ->
-        // Get files from current directory
-        let currentFiles = getFiles dir
-        
-        // Get subdirectories, but filter out ones we should skip
-        let subDirs = 
-            try
-                DirectoryInfo(dir).EnumerateDirectories("*", SearchOption.TopDirectoryOnly)
-                |> Seq.filter (shouldSkipDirectory >> not)
-                |> Seq.collect (fun subDir -> getFiles subDir.FullName)
-            with
-            | _ -> Seq.empty
-        
-        Seq.append currentFiles subDirs)
-    |> Seq.filter Subtitle.isSubtitleFile
-    |> Seq.filter (fun file -> Subtitle.shouldDelete file.Name)
-    |> Seq.map (fun file -> file.FullPath)
+/// Classify subtitle files into categories
+type SubtitleClassification =
+    | ToDelete of path: string
+    | Uncertain of path: string
+    | ToKeep
+
+/// Classify a subtitle file based on language detection
+let private classifySubtitle (file: ExistingFile) (dirFiles: seq<ExistingFile>) : SubtitleClassification =
+    // If subtitle matches video filename, always keep it
+    if Subtitle.matchesVideoFile file.FullPath dirFiles then
+        ToKeep
+    elif Subtitle.shouldDelete file.Name then
+        ToDelete file.FullPath
+    elif Subtitle.isUncertain file.Name then
+        Uncertain file.FullPath
+    else
+        ToKeep
+
+/// Find and classify subtitle files in directories (single pass)
+/// Returns (filesToDelete, uncertainFiles)
+let private classifySubtitles (directories: seq<string>) : seq<string> * seq<string> =
+    let allSubtitles =
+        directories
+        |> Seq.collect (fun dir ->
+            let dirFiles = getFiles dir |> Seq.toList
+            
+            let subDirFiles = 
+                try
+                    DirectoryInfo(dir).EnumerateDirectories("*", SearchOption.TopDirectoryOnly)
+                    |> Seq.filter (shouldSkipDirectory >> not)
+                    |> Seq.collect (fun subDir -> 
+                        let subFiles = getFiles subDir.FullName |> Seq.toList
+                        subFiles |> Seq.map (fun f -> (f, subFiles)))
+                    |> Seq.toList
+                with
+                | _ -> []
+            
+            // Process current directory files
+            let currentSubs = 
+                dirFiles 
+                |> List.filter Subtitle.isSubtitleFile
+                |> List.map (fun f -> classifySubtitle f dirFiles)
+            
+            // Process subdirectory files
+            let subDirSubs = 
+                subDirFiles
+                |> List.filter (fun (f, _) -> Subtitle.isSubtitleFile f)
+                |> List.map (fun (f, filesInSameDir) -> classifySubtitle f filesInSameDir)
+            
+            List.append currentSubs subDirSubs)
+        |> Seq.toList
+    
+    let toDelete = 
+        allSubtitles 
+        |> List.choose (function ToDelete path -> Some path | _ -> None)
+    
+    let uncertain = 
+        allSubtitles 
+        |> List.choose (function Uncertain path -> Some path | _ -> None)
+    
+    (toDelete, uncertain)
 
 /// Clean movie directories - delete small folders and unwanted subtitles
 let clean (path: string) (previewMode: PreviewMode) 
@@ -81,8 +121,15 @@ let clean (path: string) (previewMode: PreviewMode)
             | Ok folders -> folders
             | Error _ -> Seq.empty
         
-        // Find subtitles to delete only in changed directories
-        let subtitlesToDelete = findSubtitlesToDelete dirsToCheck
+        // Classify subtitles in changed directories (single pass)
+        let subtitlesToDelete, uncertainSubtitles = classifySubtitles dirsToCheck
+        
+        // Report uncertain subtitles in preview mode (inline with deletions)
+        if not isExecute && not (Seq.isEmpty uncertainSubtitles) then
+            Logging.logInfo "=== UNCERTAIN SUBTITLES (Review Manually) ==="
+            uncertainSubtitles |> Seq.iter (fun path -> 
+                Logging.logInfo (sprintf "  [UNCERTAIN] %s" path))
+            Logging.logInfo ""
         
         // Combine folders and subtitle files
         let allItemsToDelete = Seq.append foldersToDelete subtitlesToDelete

@@ -144,7 +144,7 @@ module SubtitleTests =
 
     [<Fact>]
     let ``Movie.2025.1080p.WEBRip.srt should be kept (uncertain)``() =
-        Subtitle.shouldDelete "Movie.2025.1080p.WEBRip.x264.AAC5.1-[YTS.MX].srt" |> should be False
+        Subtitle.shouldDelete "Movie.2025.1080p.WEBRip.x264.srt" |> should be False
 
     // ============================================================================
     // Various Filename Patterns

@@ -131,24 +131,76 @@ module Subtitle =
     
     /// ISO 639-2/3 language codes that should be DELETED (not kept)
     /// Updated to keep English and French (including Canadian French)
+    /// Includes common variants and alternative codes
     /// Source: https://www.opensubtitles.org/
     let private languagesToDelete = [
-        // European languages (excluding French)
-        "ara"; "baq"; "cat"; "cze"; "dan"; "dut"; "fin"; "ger"; "glg"
-        "gre"; "hun"; "ita"; "nor"; "pol"; "por"; "rum"; "spa"; "swe"; "tur"
+        // Arabic
+        "ara"; "arb"; "ar"; "arabic" 
         // Asian languages
-        "chi"; "jpn"; "kor"; "tha"; "vie"; "hin"; "kan"; "mal"; "tam"; "tel"
-        // Other languages
-        "rus"; "ukr"; "heb"; "per"; "bul"; "hrv"; "slv"; "srp"; "est"; "lav"
-        "lit"; "ice"; "alb"; "arm"; "geo"; "mac"; "slo"; "bos"; "may"; "ind"
+        "chi"; "zho"; "zh"; "cmn"; "yue"; "chinese"  // Chinese (Mandarin, Cantonese)
+        "jpn"; "ja"; "jp"; "japanese" 
+        "kor"; "ko"; "kr"; "korean" 
+        "tha"; "th"; "thai"
+        "vie"; "vi"; "vietnamese"
+        "hin"; "hi"; "hindi"
+        "kan"; "kn"; "kannada"
+        "mal"; "ml"; "malayalam"
+        "tam"; "ta"; "tamil"
+        "tel"; "te"; "telugu"
+        "ben"; "bn"; "bengali"
+        "mar"; "marathi"
+        "pan"; "pa"; "punjabi"
+        // European languages (excluding English and French)
+        "spa"; "es"; "esp"; "spanish"
+        "por"; "pt"; "pt-br"; "portuguese"
+        "ger"; "deu"; "de"; "german"
+        "ita"; "italian"
+        "dut"; "nld"; "nl"; "dutch"
+        "pol"; "pl"; "polish"
+        "rus"; "ru"; "russian"
+        "ukr"; "ukrainian"
+        "cze"; "ces"; "cs"; "czech"
+        "swe"; "sv"; "swedish"
+        "dan"; "da"; "danish"
+        "nor"; "no"; "nob"; "nno"; "norwegian"
+        "fin"; "fi" ; "finnish"
+        "gre"; "ell"; "el"; "greek"
+        "tur"; "tr"; "turkish"
+        "hun"; "hu"; "hungarian"
+        "rum"; "ron"; "ro"; "romanian"
+        "bul"; "bg"; "bulgarian"
+        "hrv"; "hr"; "croatian"
+        "srp"; "sr"; "serbian"
+        "slv"; "sl"; "slovenian"
+        "slo"; "slk"; "sk"; "slovak"
+        "bos"; "bs"; "bosnian"
+        "mac"; "mkd"; "mk"; "macedonian"
+        "alb"; "sqi"; "sq"; "albanian"
+        "est"; "et"; "estonian"
+        "lav"; "lv"; "latvian"
+        "lit"; "lt"; "lithuanian"
+        "ice"; "isl"; "is"; "icelandic"
+        // Other European
+        "baq"; "eus"; "eu"; "basque"
+        "cat"; "ca"; "catalan"
+        "glg"; "gl"; "galician"
+        "arm"; "hye"; "hy"; "armenian"
+        "geo"; "kat"; "ka"; "georgian"
+        // Middle Eastern
+        "heb"; "hebrew"
+        "per"; "fas"; "fa"; "persian"; "farsi"
+        // Southeast Asian
+        "may"; "msa"; "ms"; "malay"
+        "ind"; "id"; "indonesian"
+        "fil"; "tl"; "filipino"; "tagalog"
+        // Other
+        "swa"; "sw"; "swahili"
     ]
     
     /// Language indicators to KEEP (English and French variants)
     let private languagesToKeep = [
         // English variants
         "english"; "eng"; "en"
-        // Hearing impaired subtitles (always keep regardless of language)
-        "sdh"; "hi"; "cc"  // SDH = Subtitles for Deaf/Hard of hearing, HI = Hearing Impaired, CC = Closed Captions
         // French variants (standard ISO codes first for better matching)
         "fra"; "fre"; "fr"; "french"; "francais"; "français"
         // Canadian French variants
@@ -188,11 +240,32 @@ module Subtitle =
         | false, true -> true   // Has other language code - delete it
         | false, false -> false // Uncertain - keep it (safe default)
     
+    /// Check if a subtitle file's language is uncertain (no recognizable language code)
+    /// Used for reporting in preview mode
+    let isUncertain (filename: string) : bool =
+        let hasLanguageToKeep = containsLanguageCode languagesToKeep filename
+        let hasLanguageToDelete = containsLanguageCode languagesToDelete filename
+        
+        match hasLanguageToKeep, hasLanguageToDelete with
+        | false, false -> true  // No language code detected - uncertain
+        | _ -> false            // Language detected (either keep or delete)
+    
     /// Check if file is a subtitle by extension
     let isSubtitleFile (file: ExistingFile) : bool =
         match file.Extension with
         | ".srt" | ".sub" | ".sbv" | ".ass" | ".ssa" | ".vtt" -> true
         | _ -> false
+    
+    /// Check if subtitle filename matches a video file in the same directory
+    /// If it does, we should keep it (guaranteed to be wanted)
+    let matchesVideoFile (subtitlePath: string) (dirFiles: seq<ExistingFile>) : bool =
+        let subtitleBase = Path.GetFileNameWithoutExtension(subtitlePath).ToLowerInvariant()
+        
+        dirFiles
+        |> Seq.filter (fun f -> ExistingFile.classifyMediaType f = Video)
+        |> Seq.exists (fun videoFile ->
+            let videoBase = Path.GetFileNameWithoutExtension(videoFile.Name).ToLowerInvariant()
+            subtitleBase = videoBase)
 
 // ============================================================================
 // Error Formatting
