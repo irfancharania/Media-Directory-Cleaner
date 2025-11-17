@@ -1,162 +1,187 @@
-module SubtitleTests
+namespace MediaDirectoryCleaner.Tests
 
-open Expecto
-open Expecto.Flip
+open Xunit
+open FsUnit.Xunit
 open Domain
 
-let englishSubtitleTests =
-    testList "English Subtitle Detection" [
-        
-        testList "Obvious English indicators" [
-            test "English.srt is English" {
-                let result = Subtitle.isNonEnglish "English.srt"
-                Expect.isFalse "" result
-            }
-            
-            test "english.srt is English (case insensitive)" {
-                let result = Subtitle.isNonEnglish "english.srt"
-                Expect.isFalse "" result
-            }
-            
-            test "Movie.eng.srt is English" {
-                let result = Subtitle.isNonEnglish "Movie.eng.srt"
-                Expect.isFalse "" result
-            }
-            
-            test "Movie.en.srt is English" {
-                let result = Subtitle.isNonEnglish "Movie.en.srt"
-                Expect.isFalse "" result
-            }
-            
-            test "SDH.eng.HI.srt is English (hearing impaired)" {
-                let result = Subtitle.isNonEnglish "SDH.eng.HI.srt"
-                Expect.isFalse "" result
-            }
-        ]
-        
-        testList "Common non-English patterns" [
-            test "spa.srt is NOT English (Spanish)" {
-                let result = Subtitle.isNonEnglish "spa.srt"
-                Expect.isTrue "" result
-            }
-            
-            test "fre.srt is NOT English (French)" {
-                let result = Subtitle.isNonEnglish "fre.srt"
-                Expect.isTrue "" result
-            }
-            
-            test "ger.srt is NOT English (German)" {
-                let result = Subtitle.isNonEnglish "ger.srt"
-                Expect.isTrue "" result
-            }
-            
-            test "Movie.fre.srt is NOT English" {
-                let result = Subtitle.isNonEnglish "Movie.fre.srt"
-                Expect.isTrue "" result
-            }
-        ]
-        
-        testList "Real-world examples from provided file list" [
-            test "ara.srt is NOT English (Arabic)" {
-                let result = Subtitle.isNonEnglish "ara.srt"
-                Expect.isTrue "" result
-            }
-            
-            test "baq.srt is NOT English (Basque)" {
-                let result = Subtitle.isNonEnglish "baq.srt"
-                Expect.isTrue "" result
-            }
-            
-            test "hin.srt is NOT English (Hindi)" {
-                let result = Subtitle.isNonEnglish "hin.srt"
-                Expect.isTrue "" result
-            }
-            
-            test "kan.srt is NOT English (Kannada)" {
-                let result = Subtitle.isNonEnglish "kan.srt"
-                Expect.isTrue "" result
-            }
-            
-            test "English.srt is English" {
-                let result = Subtitle.isNonEnglish "English.srt"
-                Expect.isFalse "" result
-            }
-            
-            test "Playdate.2025.1080p.WEBRip.x264.AAC5.1-[YTS.MX].srt is uncertain - keep it" {
-                let result = Subtitle.isNonEnglish "Playdate.2025.1080p.WEBRip.x264.AAC5.1-[YTS.MX].srt"
-                Expect.isFalse "" result  // No language code = keep it
-            }
-        ]
-        
-        testList "Ambiguous cases - err on side of caution" [
-            test "movie.srt without language code - keep it (uncertain)" {
-                let result = Subtitle.isNonEnglish "movie.srt"
-                Expect.isFalse "" result  // Don't delete if unsure
-            }
-            
-            test "subs.srt without language code - keep it (uncertain)" {
-                let result = Subtitle.isNonEnglish "subs.srt"
-                Expect.isFalse "" result
-            }
-            
-            test "Space.Jam.1996.srt - keep it (no language indicator)" {
-                let result = Subtitle.isNonEnglish "Space.Jam.1996.srt"
-                Expect.isFalse "" result
-            }
-        ]
-        
-        testList "Various filename patterns" [
-            test "movie_spa.srt with underscore" {
-                let result = Subtitle.isNonEnglish "movie_spa.srt"
-                Expect.isTrue "" result
-            }
-            
-            test "movie-fre.srt with dash" {
-                let result = Subtitle.isNonEnglish "movie-fre.srt"
-                Expect.isTrue "" result
-            }
-            
-            test "movie.ger.forced.srt with multiple dots" {
-                let result = Subtitle.isNonEnglish "movie.ger.forced.srt"
-                Expect.isTrue "" result
-            }
-            
-            test "movie.eng.forced.srt is English" {
-                let result = Subtitle.isNonEnglish "movie.eng.forced.srt"
-                Expect.isFalse "" result
-            }
-            
-            test "subtitle_eng.srt with underscore is English" {
-                let result = Subtitle.isNonEnglish "subtitle_eng.srt"
-                Expect.isFalse "" result
-            }
-            
-            test "subtitle_ara_forced.srt is NOT English" {
-                let result = Subtitle.isNonEnglish "subtitle_ara_forced.srt"
-                Expect.isTrue "" result
-            }
-            
-            test "eng.srt at start is English" {
-                let result = Subtitle.isNonEnglish "eng.srt"
-                Expect.isFalse "" result
-            }
-            
-            test "english.srt at start is English" {
-                let result = Subtitle.isNonEnglish "english.srt"
-                Expect.isFalse "" result
-            }
-            
-            test "movie_eng_forced.srt with underscores is English" {
-                let result = Subtitle.isNonEnglish "movie_eng_forced.srt"
-                Expect.isFalse "" result
-            }
-            
-            test "movie_spa_forced.srt with underscores is NOT English" {
-                let result = Subtitle.isNonEnglish "movie_spa_forced.srt"
-                Expect.isTrue "" result
-            }
-        ]
-    ]
+module SubtitleTests = 
 
-[<Tests>]
-let tests = englishSubtitleTests
+    // ============================================================================
+    // English Subtitle Tests
+    // ============================================================================
+
+    [<Fact>]
+    let ``English.srt should be kept``() =
+        Subtitle.shouldDelete "English.srt" |> should be False
+
+    [<Fact>]
+    let ``english.srt should be kept (case insensitive)``() =
+        Subtitle.shouldDelete "english.srt" |> should be False
+
+    [<Fact>]
+    let ``Movie.eng.srt should be kept``() =
+        Subtitle.shouldDelete "Movie.eng.srt" |> should be False
+
+    [<Fact>]
+    let ``Movie.en.srt should be kept``() =
+        Subtitle.shouldDelete "Movie.en.srt" |> should be False
+
+    [<Fact>]
+    let ``SDH.eng.HI.srt should be kept (hearing impaired)``() =
+        Subtitle.shouldDelete "SDH.eng.HI.srt" |> should be False
+
+    // ============================================================================
+    // French Subtitle Tests
+    // ============================================================================
+
+    [<Fact>]
+    let ``fre.srt should be kept (French)``() =
+        Subtitle.shouldDelete "fre.srt" |> should be False
+
+    [<Fact>]
+    let ``French.srt should be kept``() =
+        Subtitle.shouldDelete "French.srt" |> should be False
+
+    [<Fact>]
+    let ``Movie.fra.srt should be kept``() =
+        Subtitle.shouldDelete "Movie.fra.srt" |> should be False
+
+    [<Fact>]
+    let ``SDH.fre.srt should be kept``() =
+        Subtitle.shouldDelete "SDH.fre.srt" |> should be False
+
+    [<Fact>]
+    let ``fr-ca.srt should be kept (Canadian French)``() =
+        Subtitle.shouldDelete "fr-ca.srt" |> should be False
+
+    // ============================================================================
+    // Non-English/French Tests
+    // ============================================================================
+
+    [<Fact>]
+    let ``spa.srt should be deleted (Spanish)``() =
+        Subtitle.shouldDelete "spa.srt" |> should be True
+
+    [<Fact>]
+    let ``ger.srt should be deleted (German)``() =
+        Subtitle.shouldDelete "ger.srt" |> should be True
+
+    [<Fact>]
+    let ``Movie.ger.srt should be deleted``() =
+        Subtitle.shouldDelete "Movie.ger.srt" |> should be True
+
+    [<Fact>]
+    let ``ara.srt should be deleted (Arabic)``() =
+        Subtitle.shouldDelete "ara.srt" |> should be True
+
+    [<Fact>]
+    let ``baq.srt should be deleted (Basque)``() =
+        Subtitle.shouldDelete "baq.srt" |> should be True
+
+    [<Fact>]
+    let ``hin.srt should be deleted (Hindi)``() =
+        Subtitle.shouldDelete "hin.srt" |> should be True
+
+    [<Fact>]
+    let ``kan.srt should be deleted (Kannada)``() =
+        Subtitle.shouldDelete "kan.srt" |> should be True
+
+    [<Fact>]
+    let ``por.srt should be deleted (Portuguese)``() =
+        Subtitle.shouldDelete "por.srt" |> should be True
+
+    [<Fact>]
+    let ``ita.srt should be deleted (Italian)``() =
+        Subtitle.shouldDelete "ita.srt" |> should be True
+
+    // ============================================================================
+    // Real-World Examples
+    // ============================================================================
+
+    [<Fact>]
+    let ``Brazilian.por.srt should be deleted``() =
+        Subtitle.shouldDelete "Brazilian.por.srt" |> should be True
+
+    [<Fact>]
+    let ``Latin American.spa.srt should be deleted``() =
+        Subtitle.shouldDelete "Latin American.spa.srt" |> should be True
+
+    [<Fact>]
+    let ``SDH.ger.HI.srt should be deleted (German even with SDH)``() =
+        Subtitle.shouldDelete "SDH.ger.HI.srt" |> should be True
+
+    [<Fact>]
+    let ``SDH.spa.HI.srt should be deleted (Spanish even with SDH)``() =
+        Subtitle.shouldDelete "SDH.spa.HI.srt" |> should be True
+
+    [<Fact>]
+    let ``4_Russian.srt should be deleted``() =
+        Subtitle.shouldDelete "4_Russian.srt" |> should be True
+
+    [<Fact>]
+    let ``5_English.srt should be kept``() =
+        Subtitle.shouldDelete "5_English.srt" |> should be False
+
+    [<Fact>]
+    let ``8_French.srt should be kept``() =
+        Subtitle.shouldDelete "8_French.srt" |> should be False
+
+    // ============================================================================
+    // Ambiguous Cases - Conservative (Keep)
+    // ============================================================================
+
+    [<Fact>]
+    let ``movie.srt without language code should be kept (uncertain)``() =
+        Subtitle.shouldDelete "movie.srt" |> should be False
+
+    [<Fact>]
+    let ``subs.srt without language code should be kept``() =
+        Subtitle.shouldDelete "subs.srt" |> should be False
+
+    [<Fact>]
+    let ``Movie.1996.srt should be kept (no language indicator)``() =
+        Subtitle.shouldDelete "Movie.1996.srt" |> should be False
+
+    [<Fact>]
+    let ``Movie.2025.1080p.WEBRip.srt should be kept (uncertain)``() =
+        Subtitle.shouldDelete "Movie.2025.1080p.WEBRip.x264.AAC5.1-[YTS.MX].srt" |> should be False
+
+    // ============================================================================
+    // Various Filename Patterns
+    // ============================================================================
+
+    [<Fact>]
+    let ``movie_spa.srt with underscore should be deleted``() =
+        Subtitle.shouldDelete "movie_spa.srt" |> should be True
+
+    [<Fact>]
+    let ``movie-ger.srt with dash should be deleted``() =
+        Subtitle.shouldDelete "movie-ger.srt" |> should be True
+
+    [<Fact>]
+    let ``movie.ger.forced.srt should be deleted``() =
+        Subtitle.shouldDelete "movie.ger.forced.srt" |> should be True
+
+    [<Fact>]
+    let ``movie.eng.forced.srt should be kept``() =
+        Subtitle.shouldDelete "movie.eng.forced.srt" |> should be False
+
+    [<Fact>]
+    let ``subtitle_eng.srt with underscore should be kept``() =
+        Subtitle.shouldDelete "subtitle_eng.srt" |> should be False
+
+    [<Fact>]
+    let ``subtitle_ara_forced.srt should be deleted``() =
+        Subtitle.shouldDelete "subtitle_ara_forced.srt" |> should be True
+
+    [<Fact>]
+    let ``eng.srt at start should be kept``() =
+        Subtitle.shouldDelete "eng.srt" |> should be False
+
+    [<Fact>]
+    let ``movie_eng_forced.srt with underscores should be kept``() =
+        Subtitle.shouldDelete "movie_eng_forced.srt" |> should be False
+
+    [<Fact>]
+    let ``movie_spa_forced.srt with underscores should be deleted``() =
+        Subtitle.shouldDelete "movie_spa_forced.srt" |> should be True
