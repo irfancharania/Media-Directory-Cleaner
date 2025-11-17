@@ -64,13 +64,14 @@ DirectoryCleaner.exe --mode movies --path "C:\Movies" --execute
 ### movies
 Cleans movie directories by:
 - Deleting directories < **100 MB** (orphaned metadata folders without video files)
-- Removing **non-English subtitle files** (keeps English, SDH, HI, CC subtitles)
+- Removing **unwanted subtitle files** (keeps English and French, removes all others)
 - Preserving `.actors`, `extrafanart` and other metadata for valid movies
 
 **Subtitle Management:**
-- Keeps: English, eng, en, SDH (hearing impaired), HI, CC (closed captions)
-- Removes: 40+ non-English languages (spa, fre, ger, ara, hin, etc.)
-- Conservative: If language is uncertain, file is kept
+- **Keeps**: English (eng, en, english), French (fre, fra, fr, français), Canadian French (fr-ca, québec)
+- **Keeps**: SDH (hearing impaired), HI, CC (closed captions)
+- **Removes**: 40+ other languages (spa, ger, ara, hin, ita, por, etc.)
+- **Conservative**: If language is uncertain, file is kept
 
 ### tv
 Cleans TV show directories by:
@@ -117,8 +118,10 @@ Movies
    |---- Some Movie (2015)
    |       |---- movie.mp4              (kept - main video)
    |       |---- English.srt            (kept - English subtitle)
+   |       |---- French.srt             (kept - French subtitle)
+   |       |---- fr-ca.srt              (kept - Canadian French)
    |       |---- spa.srt                (deleted - Spanish)
-   |       |---- fre.srt                (deleted - French)
+   |       |---- ger.srt                (deleted - German)
    |       |---- poster.jpg             (kept - metadata)
    |       |---- .actors/               (kept - starts with .)
    |
@@ -191,23 +194,23 @@ Logs include:
 
 ## Notes
 
-> - Directories starting with `.` (like `.actors`) and `extrafanart` are **ignored** when determining leaf nodes and calculating sizes
-> - These special directories are preserved with valid movies and deleted with orphaned movies
+> - **Dot-prefixed directories** (like `.actors`) are never deleted themselves and are not recursed into when cleaning - their fate is determined by their parent folder
+> - **extrafanart directories** are treated similarly - they're not recursed into, but preserved with their parent
 > - Preview mode is the default. Use `--execute` to actually delete
 > - When in doubt, files are kept (conservative approach)
 > - Subtitle language detection uses ISO 639-2/3 language codes
-> - **Iterative cleaning**: The tool runs as a scheduled job. Metadata deletion in one run may leave empty folders that get cleaned in the next run
+> - Accessibility subtitles (SDH/HI/CC) with English or French are always kept
 
 ## Supported Subtitle Languages
 
-### Kept (English variants)
-- English, eng, en
-- SDH (Subtitles for Deaf/Hard of hearing)
-- HI (Hearing Impaired)
-- CC (Closed Captions)
+### Kept (English and French variants)
+- **English**: English, eng, en
+- **French**: French, français, fre, fra, fr
+- **Canadian French**: fr-ca, frc, québec, canadien
+- **Accessibility**: SDH (Subtitles for Deaf/Hard of hearing), HI (Hearing Impaired), CC (Closed Captions)
 
-### Removed (40+ languages)
-Arabic (ara), Basque (baq), Catalan (cat), Czech (cze), Danish (dan), Dutch (dut), Finnish (fin), French (fre), German (ger), Galician (glg), Greek (gre), Hindi (hin), Hungarian (hun), Italian (ita), Norwegian (nor), Polish (pol), Portuguese (por), Romanian (rum), Spanish (spa), Swedish (swe), Turkish (tur), Chinese (chi), Japanese (jpn), Korean (kor), Kannada (kan), Malayalam (mal), Tamil (tam), Telugu (tel), and many more...
+### Removed (40+ other languages)
+Arabic (ara), Basque (baq), Catalan (cat), Czech (cze), Danish (dan), Dutch (dut), Finnish (fin), German (ger), Galician (glg), Greek (gre), Hindi (hin), Hungarian (hun), Italian (ita), Norwegian (nor), Polish (pol), Portuguese (por), Romanian (rum), Spanish (spa), Swedish (swe), Turkish (tur), Chinese (chi), Japanese (jpn), Korean (kor), Kannada (kan), Malayalam (mal), Tamil (tam), Telugu (tel), and many more...
 
 ## Building
 

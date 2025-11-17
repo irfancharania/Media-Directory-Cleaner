@@ -9,13 +9,26 @@ open Size
 let logFileName = "cleanLog.log"
 
 // ============================================================================
-// Core Directory Operations
+// Directory Filtering
 // ============================================================================
 
-/// Check if directory should be ignored (starts with "." or is "extrafanart")
-let private shouldIgnoreDirectory (dirInfo: DirectoryInfo) : bool =
-    dirInfo.Name.StartsWith(".") || 
-    String.Equals(dirInfo.Name, "extrafanart", StringComparison.OrdinalIgnoreCase)
+/// Check if a directory should be filtered out from deletion consideration
+/// These directories are never evaluated for deletion themselves
+/// Their fate is determined by their parent folder's size/content
+/// Examples: .actors, .nfo, extrafanart
+let shouldFilterDirectory (dirName: string) : bool =
+    dirName.StartsWith(".") || 
+    String.Equals(dirName, "extrafanart", StringComparison.OrdinalIgnoreCase)
+
+/// Check if a directory should be skipped when recursing to find files
+/// Used when looking FOR files inside directories (not AT the directories themselves)
+/// Same logic as shouldFilterDirectory but takes DirectoryInfo for convenience
+let shouldSkipDirectory (dirInfo: DirectoryInfo) : bool =
+    shouldFilterDirectory dirInfo.Name
+
+// ============================================================================
+// Core Directory Operations
+// ============================================================================
 
 /// Get all subdirectories, filtering out special directories 
 let getSubdirectories (searchOption: SearchOption) (path: ValidatedPath) 
@@ -24,7 +37,7 @@ let getSubdirectories (searchOption: SearchOption) (path: ValidatedPath)
         let pathStr = ValidatedPath.value path
         let directories = 
             DirectoryInfo(pathStr).EnumerateDirectories("*.*", searchOption)
-            |> Seq.filter (shouldIgnoreDirectory >> not)
+            |> Seq.filter (fun di -> not (shouldFilterDirectory di.Name))
             |> Seq.map ExistingDirectory.fromDirectoryInfo
         
         if Seq.isEmpty directories then
@@ -43,19 +56,19 @@ let getFiles (path: string) : seq<ExistingFile> =
     DirectoryInfo(path).EnumerateFiles("*", SearchOption.TopDirectoryOnly)
     |> Seq.map ExistingFile.fromFileInfo
 
-/// Calculate total size of files in directory (MB) - top level only
+/// Calculate total size of files in directory (MB)
 let getDirectorySizeMB (path: string) : int64<MB> =
     getFiles path
     |> Seq.sumBy ExistingFile.sizeInMB
 
-/// Check if a directory is a leaf node (has no non-special subdirectories)
+/// Check if a directory is a leaf node (has no subdirectories)
 let isLeafNode (path: string) : bool =
     match ValidatedPath.create path with
     | Error _ -> false
     | Ok validPath ->
         match getTopSubdirectories validPath with
-        | Ok subdirs -> Seq.isEmpty subdirs  // If we got subdirs after filtering, it's not a leaf
-        | Error _ -> true  // No subdirs means it's a leaf
+        | Ok _ -> false
+        | Error _ -> true
 
 /// Filter directories to only leaf nodes
 let filterToLeafNodes (directories: seq<ExistingDirectory>) 

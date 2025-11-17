@@ -6,24 +6,22 @@ open System.Text.RegularExpressions
 open FsToolkit.ErrorHandling
 open Domain
 open FileSystem
+open Utility
 open Size
 
 let ThresholdSizeMB = 100L<MB>
 
 /// Partition files into main files (videos) and extra files
-/// Using the Seq.partition from Utility.fs (which handles sequences properly)
 let private partitionFiles (files: seq<ExistingFile>) =
-    files
-    |> Seq.toList  // Convert to list to avoid multiple enumeration issues
-    |> List.partition (fun file ->
+    Seq.partition (fun file ->
         match file with
         | VideoFile ThresholdSizeMB _ -> true
-        | _ -> false)
+        | _ -> false) files
 
 /// Remove common suffixes from filenames for matching
 let private normalizeFileName (fileName: string) =
     let removeSuffix (suffix: string) (s: string) =
-        if s.EndsWith(suffix, StringComparison.OrdinalIgnoreCase) then
+        if s.EndsWith(suffix) then
             s.Substring(0, s.Length - suffix.Length)
         else
             s
@@ -47,8 +45,7 @@ let private findOrphanedFiles (mainFiles: seq<ExistingFile>) (extraFiles: seq<Ex
     if Seq.isEmpty mainFiles then
         extraFiles |> Seq.map (fun f -> f.FullPath)
     else
-        // Get normalized base names of all video files
-        let mainFileBaseNames =
+        let mainFileNames =
             mainFiles
             |> Seq.map (fun f -> normalizeFileName f.Name)
             |> Set.ofSeq
@@ -59,22 +56,36 @@ let private findOrphanedFiles (mainFiles: seq<ExistingFile>) (extraFiles: seq<Ex
             match extraFile with
             | FolderImage _ -> false
             | _ ->
-                // Check if the extra file's name contains any video file's base name
-                let extraFileName = extraFile.Name
-                mainFileBaseNames
-                |> Set.exists (fun videoBaseName -> extraFileName.Contains(videoBaseName))
-                |> not)  // If no match found, it's an orphan
+                let normalizedName = normalizeFileName extraFile.Name
+                mainFileNames
+                |> Set.exists (fun mainName -> mainName.Contains(normalizedName))
+                |> not)
         |> Seq.map (fun f -> f.FullPath)
 
-/// Check if directory has video files
-let private hasVideoFiles (path: string) : bool =
-    getFiles path
-    |> Seq.exists (fun file ->
-        match file with
-        | VideoFile ThresholdSizeMB _ -> true
-        | _ -> false)
+/// Get orphaned files from a single directory (season folder)
+/// Also returns whether the directory has any video files
+let private processDirectory (dir: string) : bool * seq<string> =
+    // Get files, but skip .actors and other dot-prefixed subdirectories
+    let currentFiles = getFiles dir
+    
+    let subDirFiles =
+        try
+            DirectoryInfo(dir).EnumerateDirectories("*", SearchOption.TopDirectoryOnly)
+            |> Seq.filter (shouldSkipDirectory >> not)
+            |> Seq.collect (fun subDir -> getFiles subDir.FullName)
+        with
+        | _ -> Seq.empty
+    
+    let allFiles = Seq.append currentFiles subDirFiles
+    let mainFiles, extraFiles = partitionFiles allFiles
+    
+    let hasVideoFiles = not (Seq.isEmpty mainFiles)
+    let orphanedFiles = findOrphanedFiles mainFiles extraFiles
+    
+    (hasVideoFiles, orphanedFiles)
 
-/// Get orphaned files from all leaf directories
+/// Get orphaned files from all subdirectories
+/// Returns both orphaned files and empty directories to delete
 let private getOrphanedItems (directories: seq<string>) 
     : Result<seq<string>, CleaningError> =
     
@@ -82,15 +93,13 @@ let private getOrphanedItems (directories: seq<string>)
     let mutable emptyDirs = []
     
     for dir in directories do
-        let files = getFiles dir
-        let mainFiles, extraFiles = partitionFiles files
+        let hasVideoFiles, orphanedFiles = processDirectory dir
         
         // If directory has no video files, mark entire directory for deletion
-        if Seq.isEmpty mainFiles then
+        if not hasVideoFiles then
             emptyDirs <- dir :: emptyDirs
         else
             // Otherwise, just collect orphaned files
-            let orphanedFiles = findOrphanedFiles mainFiles extraFiles
             allOrphans <- List.append allOrphans (orphanedFiles |> Seq.toList)
     
     let allItemsToDelete = List.append allOrphans emptyDirs
@@ -100,8 +109,7 @@ let private getOrphanedItems (directories: seq<string>)
     else
         Ok allItemsToDelete
 
-/// Clean TV show directories - delete orphaned files and empty directories
-/// Runs iteratively: orphan deletion → empty folder deletion on next run
+/// Clean TV show directories
 let clean (path: string) (previewMode: PreviewMode) 
     : Result<seq<string>, DomainError> =
     

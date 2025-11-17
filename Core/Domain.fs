@@ -122,10 +122,6 @@ module ExistingDirectory =
     let fromDirectoryInfo (dirInfo: DirectoryInfo) : ExistingDirectory =
         { FullPath = dirInfo.FullName
           Name = dirInfo.Name }
-    
-    /// Check if directory name indicates it should be ignored
-    let shouldIgnore dir =
-        dir.Name.StartsWith(".")
 
 // ============================================================================
 // Subtitle Language Detection
@@ -133,11 +129,12 @@ module ExistingDirectory =
 
 module Subtitle =
     
-    /// ISO 639-2/3 language codes that are NOT English
+    /// ISO 639-2/3 language codes that should be DELETED (not kept)
+    /// Updated to keep English and French (including Canadian French)
     /// Source: https://www.opensubtitles.org/
-    let private nonEnglishLanguageCodes = [
-        // Common European languages
-        "ara"; "baq"; "cat"; "cze"; "dan"; "dut"; "fin"; "fre"; "ger"; "glg"
+    let private languagesToDelete = [
+        // European languages (excluding French)
+        "ara"; "baq"; "cat"; "cze"; "dan"; "dut"; "fin"; "ger"; "glg"
         "gre"; "hun"; "ita"; "nor"; "pol"; "por"; "rum"; "spa"; "swe"; "tur"
         // Asian languages
         "chi"; "jpn"; "kor"; "tha"; "vie"; "hin"; "kan"; "mal"; "tam"; "tel"
@@ -146,17 +143,24 @@ module Subtitle =
         "lit"; "ice"; "alb"; "arm"; "geo"; "mac"; "slo"; "bos"; "may"; "ind"
     ]
     
-    /// English language indicators
-    let private englishIndicators = [
-        "english"; "eng"; "en"; "sdh"; "hi"; "cc"  // SDH = Subtitles for Deaf/Hard of hearing, HI = Hearing Impaired, CC = Closed Captions
+    /// Language indicators to KEEP (English and French variants)
+    let private languagesToKeep = [
+        // English variants
+        "english"; "eng"; "en"
+        // Hearing impaired subtitles (always keep regardless of language)
+        "sdh"; "hi"; "cc"  // SDH = Subtitles for Deaf/Hard of hearing, HI = Hearing Impaired, CC = Closed Captions
+        // French variants (standard ISO codes first for better matching)
+        "fra"; "fre"; "fr"; "french"; "francais"; "français"
+        // Canadian French variants
+        "fr-ca"; "frc"; "frca"; "french-canadian"; "canadien"; "quebec"; "québec"
     ]
     
-    /// Check if filename contains any non-English language code
-    let private containsNonEnglishCode (filename: string) =
+    /// Check if filename contains a language code from the given list
+    /// Matches patterns: .code., _code_, .code.srt, _code.srt, code.srt (at start)
+    let private containsLanguageCode (codes: string list) (filename: string) =
         let lower = filename.ToLowerInvariant()
-        nonEnglishLanguageCodes
+        codes
         |> List.exists (fun code -> 
-            // Match patterns: .code., _code_, .code.srt, _code.srt, code.srt (at start)
             lower.Contains($".{code}.") || 
             lower.Contains($"_{code}_") || 
             lower.Contains($".{code}_") || 
@@ -167,36 +171,21 @@ module Subtitle =
             lower.EndsWith($"_{code}.srt") ||
             lower.EndsWith($".{code}.sub") ||
             lower.EndsWith($"_{code}.sub") ||
+            lower.StartsWith($"{code}.") ||
+            lower.StartsWith($"{code}_") ||
             lower = $"{code}.srt" ||
             lower = $"{code}.sub")
     
-    /// Check if filename explicitly indicates English
-    let private containsEnglishIndicator (filename: string) =
-        let lower = filename.ToLowerInvariant()
-        englishIndicators
-        |> List.exists (fun indicator -> 
-            // Match patterns: .indicator., _indicator_, etc.
-            lower.Contains($".{indicator}.") || 
-            lower.Contains($"_{indicator}_") || 
-            lower.Contains($".{indicator}_") || 
-            lower.Contains($"_{indicator}.") || 
-            lower.Contains($"-{indicator}.") ||
-            lower.Contains($"-{indicator}_") ||
-            lower.StartsWith($"{indicator}.") ||
-            lower.StartsWith($"{indicator}_") ||
-            lower = $"{indicator}.srt" ||
-            lower = $"{indicator}.sub")
-    
-    /// Determine if a subtitle file is NOT English and should be deleted
-    /// Returns true if we're confident it's NOT English
-    /// Returns false if it's English OR we're uncertain (err on the side of caution)
-    let isNonEnglish (filename: string) : bool =
-        let hasEnglishIndicator = containsEnglishIndicator filename
-        let hasNonEnglishCode = containsNonEnglishCode filename
+    /// Determine if a subtitle file should be deleted
+    /// Returns true if we're confident it should be DELETED (not English/French)
+    /// Returns false if it's English/French OR we're uncertain (err on the side of caution)
+    let shouldDelete (filename: string) : bool =
+        let hasLanguageToKeep = containsLanguageCode languagesToKeep filename
+        let hasLanguageToDelete = containsLanguageCode languagesToDelete filename
         
-        match hasEnglishIndicator, hasNonEnglishCode with
-        | true, _ -> false      // Explicitly English - keep it
-        | false, true -> true   // Has non-English code - delete it
+        match hasLanguageToKeep, hasLanguageToDelete with
+        | true, _ -> false      // Explicitly English/French - keep it
+        | false, true -> true   // Has other language code - delete it
         | false, false -> false // Uncertain - keep it (safe default)
     
     /// Check if file is a subtitle by extension
