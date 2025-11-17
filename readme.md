@@ -63,9 +63,11 @@ DirectoryCleaner.exe --mode movies --path "C:\Movies" --execute
 
 ### movies
 Cleans movie directories by:
-- Deleting directories < **100 MB** (orphaned metadata folders without video files)
+- Deleting **leaf directories** < **100 MB** (orphaned metadata folders without video files)
 - Removing **unwanted subtitle files** (keeps English and French, removes all others)
 - Preserving `.actors`, `extrafanart` and other metadata for valid movies
+
+**Important:** The cleaner works **iteratively** on leaf directories only. After deleting small folders, previously nested directories may become new leaf nodes. Run multiple times until no more items are found.
 
 **Subtitle Management:**
 - **Keeps**: English (eng, en, english), French (fre, fra, fr, français), Canadian French (fr-ca, québec)
@@ -184,18 +186,18 @@ Music
 
 ## Logging
 
-The tool creates a log file named `cleanLog.log` in the specified path directory.
+The tool creates the following files in the specified path directory:
 
-Logs include:
-- Timestamp of cleaning operation
-- List of all deleted items
+- **`cleanLog.log`** - Detailed log of all cleaning operations with timestamps
+- **`.lastrun`** - Tracks the last successful run date (UTC) for optimization
 
-**Technical Note:** The logger is properly disposed using F#'s `use` binding, ensuring all logs are flushed to disk.
+The `.lastrun` file contains a UTC timestamp in ISO 8601 format (e.g., `2025-01-15T18:30:00.0000000Z`) and is used to skip directories that haven't changed since the last run, significantly improving performance on subsequent runs.
 
 ## Notes
 
-> - **Dot-prefixed directories** (like `.actors`) are never deleted themselves and are not recursed into when cleaning - their fate is determined by their parent folder
-> - **extrafanart directories** are treated similarly - they're not recursed into, but preserved with their parent
+> - **Optimization**: After the first run, the tool tracks which directories have been scanned and only re-scans directories that have changed (based on creation/modification time)
+> - **Dot-prefixed directories** (like `.actors`) and **extrafanart** folders are never evaluated for deletion - their fate is determined by their parent folder
+> - **Iterative cleaning**: The tool processes leaf directories only. Run multiple times to clean newly exposed leaf nodes after deletions
 > - Preview mode is the default. Use `--execute` to actually delete
 > - When in doubt, files are kept (conservative approach)
 > - Subtitle language detection uses ISO 639-2/3 language codes

@@ -50,7 +50,10 @@ let clean (path: string) (previewMode: PreviewMode)
     let logFilePath = Path.Combine(path, logFileName)
     let isExecute = (previewMode = Execute)
     
-    // Get all leaf directories for subtitle scanning
+    // Check last run date for optimization
+    let lastRunDate = LastRun.tryGetLastRunDate path
+    
+    // Get all leaf directories
     let allDirsResult =
         ValidatedPath.create path
         |> Result.liftValidationError
@@ -60,23 +63,34 @@ let clean (path: string) (previewMode: PreviewMode)
     match allDirsResult with
     | Error e -> Error e
     | Ok allDirs ->
+        // Filter to only directories that changed since last run
+        let dirsToCheck = LastRun.filterChangedDirectories lastRunDate allDirs
+        
+        // Log optimization stats if we're skipping directories
+        let totalDirs = Seq.length allDirs
+        let checkedDirs = Seq.length dirsToCheck
+        if checkedDirs < totalDirs then
+            Logging.logInfo (sprintf "Optimization: Checking %d of %d directories (skipped %d unchanged)" 
+                                    checkedDirs totalDirs (totalDirs - checkedDirs))
+        
         // Try to get directories to delete (might fail if none are small enough)
-        let foldersResult =
-            allDirs
-            |> filterDirectoriesBySize
+        let foldersResult = dirsToCheck |> filterDirectoriesBySize
         
         let foldersToDelete = 
             match foldersResult with
             | Ok folders -> folders
             | Error _ -> Seq.empty
         
-        // Find subtitles to delete in all directories (regardless of size)
-        let subtitlesToDelete = findSubtitlesToDelete allDirs
+        // Find subtitles to delete only in changed directories
+        let subtitlesToDelete = findSubtitlesToDelete dirsToCheck
         
         // Combine folders and subtitle files
         let allItemsToDelete = Seq.append foldersToDelete subtitlesToDelete
         
         if Seq.isEmpty allItemsToDelete then
+            // Update last run even if nothing to delete
+            if isExecute then
+                LastRun.saveLastRunDate path |> ignore
             Error (CleaningError (NothingToClean "No directories or subtitles to clean"))
         else
             if isExecute then
@@ -99,9 +113,11 @@ let clean (path: string) (previewMode: PreviewMode)
                         deleteFiles subtitlesToDelete
                         |> Result.liftCleaningError
                 
-                // Combine results
+                // Update last run date on success
                 match folderResult, subtitleResult with
-                | Ok _, Ok _ -> Ok allItemsToDelete
+                | Ok _, Ok _ -> 
+                    LastRun.saveLastRunDate path |> ignore
+                    Ok allItemsToDelete
                 | Error e, _ -> Error e
                 | _, Error e -> Error e
             else

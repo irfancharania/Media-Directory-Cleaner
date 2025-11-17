@@ -27,36 +27,40 @@ let initialize (logFilePath: string) : Logger =
 // Logging Functions
 // ============================================================================
 
-/// Log information message
+/// Log information message (requires logger instance)
 let info (logger: ILogger) message =
     logger.Information(message)
 
-/// Log information with structured data
+/// Log information with structured data (requires logger instance)
 let infoWith (logger: ILogger) message (properties: (string * obj) list) =
     let mutable l = logger.ForContext("SourceContext", "DirectoryCleaner")
     for (key, value) in properties do
         l <- l.ForContext(key, value)
     l.Information(message)
 
-/// Log warning message
+/// Log warning message (requires logger instance)
 let warn (logger: ILogger) message =
     logger.Warning(message)
 
-/// Log error message
+/// Log error message (requires logger instance)
 let error (logger: ILogger) message =
     logger.Error(message)
 
-/// Log error with exception
+/// Log error with exception (requires logger instance)
 let errorWithException (logger: ILogger) message (ex: Exception) =
     logger.Error(ex, message)
 
-/// Log a list of items that were cleaned
+/// Log a list of items that were cleaned (requires logger instance)
 let logCleanedItems (logger: ILogger) (items: seq<string>) =
     let count = Seq.length items
     if count > 0 then
         infoWith logger "Cleaned {Count} items" ["Count", box count]
         items |> Seq.iter (fun item -> 
             logger.Information("  {Item}", item))
+
+/// Simple console logging for informational messages
+let logInfo message =
+    printfn "[INFO] %s" message
 
 // ============================================================================
 // Legacy Support (for backward compatibility)
