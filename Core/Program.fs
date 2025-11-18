@@ -1,4 +1,5 @@
 ﻿open System
+open System.IO
 open Argu
 open Domain
 
@@ -24,6 +25,22 @@ type CliArguments =
             | Execute -> "execute mode - actually delete items (default is preview only)"
 
 // ============================================================================
+// Console Color Helpers
+// ============================================================================
+
+let printColored color text =
+    let oldColor = Console.ForegroundColor
+    Console.ForegroundColor <- color
+    printfn "%s" text
+    Console.ForegroundColor <- oldColor
+
+let printItem item =
+    if Directory.Exists(item) then
+        printColored ConsoleColor.Yellow (sprintf "  %s" item)
+    else
+        printColored ConsoleColor.White (sprintf "  %s" item)
+
+// ============================================================================
 // Application Logic
 // ============================================================================
 
@@ -38,8 +55,14 @@ let runClean (cleanFn: string -> PreviewMode -> Result<seq<string>, DomainError>
             if previewMode = Domain.Preview then
                 printfn "PREVIEW MODE - The following files will be deleted when run with --execute"
                 printfn ""
-            printfn "Items processed:"
-            items |> Seq.iter (printfn "  %s")
+                printfn "Items found:"
+            else
+                printfn "Items deleted:"
+            
+            // Sort items alphabetically so related files/folders appear together
+            let sortedItems = items |> Seq.sort
+            
+            sortedItems |> Seq.iter printItem
         0
     | Error error ->
         match Domain.DomainError.toOptionalMessage error with
