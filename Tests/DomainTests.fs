@@ -5,7 +5,7 @@ open FsUnit.Xunit
 open Domain
 open Size
 
-module DomainTests = 
+module DomainTests =
 
     // ============================================================================
     // ValidatedPath Tests
@@ -228,3 +228,67 @@ module DomainTests =
         let error = ValidationError (PathNotFound "test")
         let msg = DomainError.toOptionalMessage error
         msg |> should not' (equal None)
+
+    // ============================================================================
+    // Subtitle Matching Tests
+    // ============================================================================
+
+    [<Fact>]
+    let ``matchesVideoFile returns true when subtitle matches video exactly``() =
+        let subtitlePath = "V:\\Movies\\Test\\Movie.2024.1080p.srt"
+        let videoFile = { 
+            FullPath = "V:\\Movies\\Test\\Movie.2024.1080p.mp4"
+            Name = "Movie.2024.1080p.mp4"
+            Extension = ".mp4"
+            SizeInBytes = 2000000000L<byte>
+        }
+        let files = [videoFile]
+        Subtitle.matchesVideoFile subtitlePath files |> should be True
+
+    [<Fact>]
+    let ``matchesVideoFile returns false when subtitle does not match any video``() =
+        let subtitlePath = "V:\\Movies\\Test\\Different.Name.srt"
+        let videoFile = { 
+            FullPath = "V:\\Movies\\Test\\Movie.2024.1080p.mp4"
+            Name = "Movie.2024.1080p.mp4"
+            Extension = ".mp4"
+            SizeInBytes = 2000000000L<byte>
+        }
+        let files = [videoFile]
+        Subtitle.matchesVideoFile subtitlePath files |> should be False
+
+    [<Fact>]
+    let ``matchesVideoFile is case insensitive``() =
+        let subtitlePath = "V:\\Movies\\Test\\MOVIE.2024.1080P.srt"
+        let videoFile = { 
+            FullPath = "V:\\Movies\\Test\\movie.2024.1080p.mp4"
+            Name = "movie.2024.1080p.mp4"
+            Extension = ".mp4"
+            SizeInBytes = 2000000000L<byte>
+        }
+        let files = [videoFile]
+        Subtitle.matchesVideoFile subtitlePath files |> should be True
+
+    [<Fact>]
+    let ``matchesVideoFile ignores non-video files``() =
+        let subtitlePath = "V:\\Movies\\Test\\Movie.2024.srt"
+        let imageFile = { 
+            FullPath = "V:\\Movies\\Test\\Movie.2024.jpg"
+            Name = "Movie.2024.jpg"
+            Extension = ".jpg"
+            SizeInBytes = 500000L<byte>
+        }
+        let files = [imageFile]
+        Subtitle.matchesVideoFile subtitlePath files |> should be False
+
+    [<Fact>]
+    let ``isUncertain returns true when no language code detected``() =
+        Subtitle.isUncertain "movie.srt" |> should be True
+
+    [<Fact>]
+    let ``isUncertain returns false when English detected``() =
+        Subtitle.isUncertain "movie.eng.srt" |> should be False
+
+    [<Fact>]
+    let ``isUncertain returns false when other language detected``() =
+        Subtitle.isUncertain "movie.spa.srt" |> should be False

@@ -138,10 +138,10 @@ module IntegrationTests =
             ("Blockbuster (2023)/extrafanart/fanart2.jpg", Some 450000L)
             ("Blockbuster (2023)/extrafanart/fanart3.jpg", Some 520000L)
         ]
-    
+        
         try
             let result = Movies.clean testDir Domain.Preview
-        
+            
             // extrafanart should not be listed as a separate directory to clean
             match result with
             | Ok items ->
@@ -151,6 +151,59 @@ module IntegrationTests =
                 () // Expected - nothing to clean
             | Error e ->
                 failwithf "Unexpected error: %A" e
+        finally
+            cleanupTestDir testDir
+
+    [<Fact>]
+    let ``Subtitle matching video filename should be kept even if name contains language codes``() =
+        let testDir = createTestStructure [
+            // Video file with "spa" in the title (Spanish word)
+            ("Destination (2024)/The.Spanish.Prisoner.1997.1080p.mp4", Some 1000000000L) // 1 GB
+            // Subtitle matching the video filename exactly - should KEEP
+            ("Destination (2024)/The.Spanish.Prisoner.1997.1080p.srt", Some 50000L)
+            // Other language subtitles - should DELETE
+            ("Destination (2024)/ara.srt", Some 45000L)
+            ("Destination (2024)/ger.srt", Some 48000L)
+        ]
+        
+        try
+            let result = Movies.clean testDir Domain.Preview
+            
+            match result with
+            | Ok items ->
+                let itemList = items |> Seq.toList
+                // Should NOT delete the matching subtitle (even though "spa" is in the name)
+                itemList |> List.exists (fun x -> x.Contains("The.Spanish.Prisoner.1997.1080p.srt")) |> should be False
+                // Should delete non-matching language subtitles
+                itemList |> should contain (Path.Combine(testDir, "Destination (2024)", "ara.srt"))
+                itemList |> should contain (Path.Combine(testDir, "Destination (2024)", "ger.srt"))
+            | Error _ ->
+                failwith "Should have found language subtitles to delete"
+        finally
+            cleanupTestDir testDir
+
+    [<Fact>]
+    let ``Subtitle matching video in subdirectory should be kept``() =
+        let testDir = createTestStructure [
+            ("Adventure (2020)/Adventure.Movie.2020.1080p.mp4", Some 1000000000L)
+            // Subtitle in subdirectory matching video name
+            ("Adventure (2020)/Subs/Adventure.Movie.2020.1080p.srt", Some 50000L)
+            // Other subtitle that doesn't match
+            ("Adventure (2020)/Subs/spa.srt", Some 45000L)
+        ]
+        
+        try
+            let result = Movies.clean testDir Domain.Preview
+            
+            match result with
+            | Ok items ->
+                let itemList = items |> Seq.toList
+                // Matching subtitle should NOT be deleted (even in subdirectory)
+                itemList |> List.exists (fun x -> x.Contains("Adventure.Movie.2020.1080p.srt")) |> should be False
+                // Non-matching subtitle should be deleted
+                itemList |> should contain (Path.Combine(testDir, "Adventure (2020)", "Subs", "spa.srt"))
+            | Error _ ->
+                failwith "Should have found language subtitle to delete"
         finally
             cleanupTestDir testDir
 

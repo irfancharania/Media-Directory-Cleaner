@@ -4,7 +4,7 @@ open Xunit
 open FsUnit.Xunit
 open Domain
 
-module SubtitleTests = 
+module SubtitleTests =
 
     // ============================================================================
     // English Subtitle Tests
@@ -185,3 +185,56 @@ module SubtitleTests =
     [<Fact>]
     let ``movie_spa_forced.srt with underscores should be deleted``() =
         Subtitle.shouldDelete "movie_spa_forced.srt" |> should be True
+
+    // ============================================================================
+    // Edge Cases with Multiple Language Indicators
+    // ============================================================================
+
+    [<Fact>]
+    let ``English with forced flag should be kept``() =
+        Subtitle.shouldDelete "movie.eng.forced.srt" |> should be False
+
+    [<Fact>]
+    let ``French with forced flag should be kept``() =
+        Subtitle.shouldDelete "movie.fre.forced.srt" |> should be False
+
+    [<Fact>]
+    let ``SDH.eng should be kept (English accessibility)``() =
+        Subtitle.shouldDelete "SDH.eng.srt" |> should be False
+
+    [<Fact>]
+    let ``SDH.fre should be kept (French accessibility)``() =
+        Subtitle.shouldDelete "SDH.fre.srt" |> should be False
+
+    [<Fact>]
+    let ``eng.SDH.HI should be kept (English with multiple accessibility tags)``() =
+        Subtitle.shouldDelete "movie.eng.SDH.HI.srt" |> should be False
+
+    [<Fact>]
+    let ``Movie title with language-like words should be kept when uncertain``() =
+        // "Rush" contains "rus" (Russian) but as part of a word
+        Subtitle.shouldDelete "Rush.2013.BluRay.srt" |> should be False
+
+    [<Fact>]
+    let ``Multiple dots with language code should be detected``() =
+        Subtitle.shouldDelete "Movie.Name.2024.1080p.spa.srt" |> should be True
+
+    [<Fact>]
+    let ``Language code at start of filename should be detected``() =
+        Subtitle.shouldDelete "spa.Movie.2024.srt" |> should be True
+
+    [<Fact>]
+    let ``Simplified Chinese variants should be deleted``() =
+        Subtitle.shouldDelete "Simplified.chi.srt" |> should be True
+
+    [<Fact>]
+    let ``Traditional Chinese variants should be deleted``() =
+        Subtitle.shouldDelete "Traditional.chi.srt" |> should be True
+
+    [<Fact>]
+    let ``Brazilian Portuguese should be deleted``() =
+        Subtitle.shouldDelete "Brazilian.por.srt" |> should be True
+
+    [<Fact>]
+    let ``Latin American Spanish should be deleted``() =
+        Subtitle.shouldDelete "Latin American.spa.srt" |> should be True
