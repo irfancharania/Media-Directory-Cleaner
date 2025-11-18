@@ -4,18 +4,31 @@ Tool to help keep Kodi/XBMC media directories clean.
 
 ## Background
 
-Using [supplemental tools](http://kodi.wiki/view/Library_managers) like [Media Companion](http://kodi.wiki/view/Media_Companion), users can download media meta content (such as artwork and subtitles) and store it locally. Kodi/XBMC won't scrape the internet if the information it needs is present with the media.
+Using [supplemental tools](http://kodi.wiki/view/Library_managers) like [Media Companion](http://kodi.wiki/view/Media_Companion), users can download media meta content (such as artwork and subtitles) and store it locally. Kodi/XBMC won't scrape the internet if the information it needs is present locally alongside the media.
 
-Unfortunately, when media is deleted from within the Kodi/XBMC interface, the local meta files are left behind. Hence, the need for this tool.
-
-This Media Directory Cleaner is a modernized rewrite of a AutoIT script from 2005, rebuilt using modern F# 10 practices.
+Unfortunately, when media is deleted from within the Kodi/XBMC interface, the local meta files are left behind on the file system. Hence, the need for this tool.
 
 ## Features
 
 - **Safe by default** - Preview mode is default, requires explicit `--execute` flag
-- **Smart cleaning** - Identifies orphaned metadata files and small directories
-- **Subtitle cleaning** - Automatically removes non-English subtitle files (movies only)
-- **Structured logging** - Detailed logs with Serilog (properly disposed)
+- **Smart cleaning** - Identifies orphaned metadata files and directories
+- **Subtitle cleaning** - Automatically removes non-English/French subtitle files (movies only)
+
+## Arguments
+
+### Required
+
+| Argument | Short | Description |
+|----------|-------|-------------|
+| `--mode` | `-m` | Cleaning mode: `tv`, `movies`, or `music` |
+| `--path` | `-p` | Directory path to clean |
+
+### Optional
+
+| Argument | Short | Description |
+|----------|-------|-------------|
+| `--execute` | | Execute mode - actually delete items (default is preview only) |
+| `--help` | | Display help information |
 
 ## Usage
 
@@ -31,8 +44,8 @@ To actually delete files, you must add the `--execute` flag.
 
 ### Examples
 
-```bash
-# Preview what would be cleaned (safe, default behavior)
+```
+# Preview what would be cleaned
 DirectoryCleaner.exe --mode movies --path "C:\Movies"
 
 # Preview with short flags
@@ -43,17 +56,13 @@ DirectoryCleaner.exe --mode movies --path "C:\Movies" --execute
 
 # Preview music cleaning
 DirectoryCleaner.exe -m music -p "C:\Music"
-
-# Display version
-DirectoryCleaner.exe --version
-DirectoryCleaner.exe -v
 ```
 
 ### Scheduled Task
 
 For automated daily cleaning, create a scheduled task:
 
-```bash
+```
 DirectoryCleaner.exe --mode movies --path "C:\Movies" --execute
 ```
 
@@ -71,37 +80,17 @@ Cleans movie directories by:
 
 **Subtitle Management:**
 - **Keeps**: English (eng, en, english), French (fre, fra, fr, français), Canadian French (fr-ca, québec)
-- **Keeps**: SDH (hearing impaired), HI, CC (closed captions)
 - **Removes**: 40+ other languages (spa, ger, ara, hin, ita, por, etc.)
-- **Conservative**: If language is uncertain, file is kept
+- **Keeps**: If language is uncertain, file is kept
 
 ### tv
 Cleans TV show directories by:
 - Deleting orphaned files < **100 MB** without corresponding video files
-- Preserving `folder.jpg` and `poster.jpg` images
-- Handling episode naming variations and ripping group suffixes
 
 ### music
 Cleans music directories by:
 - Deleting leaf directories < **500 KB** without audio files
-- Preserving valid albums and tracks
 
-## Arguments
-
-### Required
-
-| Argument | Short | Description |
-|----------|-------|-------------|
-| `--mode` | `-m` | Cleaning mode: `tv`, `movies`, or `music` |
-| `--path` | `-p` | Directory path to clean |
-
-### Optional
-
-| Argument | Short | Description |
-|----------|-------|-------------|
-| `--execute` | | Execute mode - actually delete items (default is preview only) |
-| `--version` | `-v` | Display version information |
-| `--help` | | Display help information |
 
 ## Folder Structures
 
@@ -111,7 +100,7 @@ The main movie folder may contain set folders with subdirectories.
 
 Leaf-nodes sized below **100 MB** will be subject for deletion, as movie files are generally greater than this size. Any leftover directories will become leaf directories for the next run.
 
-**Non-English subtitles** in movie folders are also removed (regardless of folder size).
+**Non-English/French subtitles** in movie folders are also removed (regardless of folder size).
 
 #### Expected folder structure:
 
@@ -189,19 +178,16 @@ Music
 The tool creates the following files in the specified path directory:
 
 - **`cleanLog.log`** - Detailed log of all cleaning operations with timestamps
-- **`.lastrun`** - Tracks the last successful run date (UTC) for optimization
+- **`.lastrun`** - Tracks the last successful run date (UTC) for optimizing subtitle cleaning for movies
 
-The `.lastrun` file contains a UTC timestamp in ISO 8601 format (e.g., `2025-01-15T18:30:00.0000000Z`) and is used to skip directories that haven't changed since the last run, significantly improving performance on subsequent runs.
+The `.lastrun` file contains a UTC timestamp in ISO 8601 format (e.g., `2025-01-15T18:30:00.0000000Z`) and is used to skip directories that haven't changed since the last run.
 
 ## Notes
 
-> - **Optimization**: After the first run, the tool tracks which directories have been scanned and only re-scans directories that have changed (based on creation/modification time)
 > - **Dot-prefixed directories** (like `.actors`) and **extrafanart** folders are never evaluated for deletion - their fate is determined by their parent folder
 > - **Iterative cleaning**: The tool processes leaf directories only. Run multiple times to clean newly exposed leaf nodes after deletions
 > - Preview mode is the default. Use `--execute` to actually delete
 > - When in doubt, files are kept (conservative approach)
-> - Subtitle language detection uses ISO 639-2/3 language codes
-> - Accessibility subtitles (SDH/HI/CC) with English or French are always kept
 
 ## Supported Subtitle Languages
 
@@ -209,7 +195,6 @@ The `.lastrun` file contains a UTC timestamp in ISO 8601 format (e.g., `2025-01-
 - **English**: English, eng, en
 - **French**: French, français, fre, fra, fr
 - **Canadian French**: fr-ca, frc, québec, canadien
-- **Accessibility**: SDH (Subtitles for Deaf/Hard of hearing), HI (Hearing Impaired), CC (Closed Captions)
 
 ### Removed (40+ other languages)
 Arabic (ara), Basque (baq), Catalan (cat), Czech (cze), Danish (dan), Dutch (dut), Finnish (fin), German (ger), Galician (glg), Greek (gre), Hindi (hin), Hungarian (hun), Italian (ita), Norwegian (nor), Polish (pol), Portuguese (por), Romanian (rum), Spanish (spa), Swedish (swe), Turkish (tur), Chinese (chi), Japanese (jpn), Korean (kor), Kannada (kan), Malayalam (mal), Tamil (tam), Telugu (tel), and many more...
@@ -222,7 +207,7 @@ Arabic (ara), Basque (baq), Catalan (cat), Czech (cze), Danish (dan), Dutch (dut
 
 ### Build Commands
 
-```bash
+```
 # Debug build
 dotnet build
 

@@ -12,10 +12,9 @@ type CleanMode =
     | Music
 
 type CliArguments =
-    | [<AltCommandLine("-p")>] Path of path:string
-    | [<AltCommandLine("-m")>] Mode of mode:CleanMode
-    | Execute
-    | [<AltCommandLine("-v")>] Version
+    | [<AltCommandLine("-p") ; Unique ; Mandatory>] Path of string
+    | [<AltCommandLine("-m") ; Unique ; Mandatory>] Mode of CleanMode
+    | [<Unique>] Execute
     
     interface IArgParserTemplate with
         member this.Usage =
@@ -23,7 +22,6 @@ type CliArguments =
             | Path _ -> "specify the directory path to clean"
             | Mode _ -> "cleaning mode: tv, movies, or music"
             | Execute -> "execute mode - actually delete items (default is preview only)"
-            | Version -> "display version information"
 
 // ============================================================================
 // Application Logic
@@ -38,7 +36,7 @@ let runClean (cleanFn: string -> PreviewMode -> Result<seq<string>, DomainError>
             printfn "No items to clean."
         else
             if previewMode = Domain.Preview then
-                printfn "PREVIEW MODE - Nothing will be deleted. Use --execute to actually delete."
+                printfn "PREVIEW MODE - The following files will be deleted when run with --execute"
                 printfn ""
             printfn "Items processed:"
             items |> Seq.iter (printfn "  %s")
@@ -84,40 +82,38 @@ let main argv =
         try
             let results = parser.ParseCommandLine(inputs = argv, raiseOnUsage = true)
             
-            // Handle version flag (can be used standalone)
-            if results.Contains(Version) then
-                printVersion()
-            else
-                // Get required arguments for cleaning operations
-                match results.TryGetResult(Mode), results.TryGetResult(Path) with
-                | Some mode, Some path ->
-                    let previewMode = 
-                        if results.Contains(Execute) then 
-                            Domain.Execute 
-                        else 
-                            Domain.Preview
+            // Get required arguments for cleaning operations
+            match results.TryGetResult(Mode), results.TryGetResult(Path) with
+            | Some mode, Some path ->
+                let previewMode = 
+                    if results.Contains(Execute) then 
+                        Domain.Execute 
+                    else 
+                        Domain.Preview
                     
-                    // Select cleaning function based on mode
-                    let cleanFn = 
-                        match mode with
-                        | Tv -> TVShows.clean
-                        | Movies -> Movies.clean
-                        | Music -> Music.clean
+                // Select cleaning function based on mode
+                let cleanFn = 
+                    match mode with
+                    | Tv -> TVShows.clean
+                    | Movies -> Movies.clean
+                    | Music -> Music.clean
                     
-                    runClean cleanFn path previewMode
-                | None, _ ->
-                    eprintfn "Error: --mode is required for cleaning operations"
-                    printfn ""
-                    printfn "%s" (parser.PrintUsage())
-                    1
-                | _, None ->                    
-                    eprintfn "Error: --path is required for cleaning operations"
-                    printfn ""
-                    printfn "%s" (parser.PrintUsage())
-                    1
+                runClean cleanFn path previewMode
+            | None, _ ->
+                eprintfn "Error: --mode is required for cleaning operations"
+                printfn ""
+                printfn "%s" (parser.PrintUsage())
+                1
+            | _, None ->                    
+                eprintfn "Error: --path is required for cleaning operations"
+                printfn ""
+                printfn "%s" (parser.PrintUsage())
+                1
         with
         | :? ArguParseException as ex ->
             printfn "%s" ex.Message
+            printfn ""
+            printfn "%s" (parser.PrintUsage())
             1
         | ex ->
             eprintfn "Unexpected error: %s" ex.Message
