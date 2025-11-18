@@ -102,7 +102,9 @@ let private getOrphanedItems (directories: seq<string>)
             // Otherwise, just collect orphaned files
             allOrphans <- List.append allOrphans (orphanedFiles |> Seq.toList)
     
-    let allItemsToDelete = List.append allOrphans emptyDirs
+    let allItemsToDelete = 
+        List.append allOrphans emptyDirs
+        |> List.sort  // Sort alphabetically so related items appear together
     
     if List.isEmpty allItemsToDelete then
         Error (NothingToClean "No orphaned files or empty directories found")

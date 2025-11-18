@@ -59,10 +59,7 @@ let runClean (cleanFn: string -> PreviewMode -> Result<seq<string>, DomainError>
             else
                 printfn "Items deleted:"
             
-            // Sort items alphabetically so related files/folders appear together
-            let sortedItems = items |> Seq.sort
-            
-            sortedItems |> Seq.iter printItem
+            items |> Seq.iter printItem
         0
     | Error error ->
         match Domain.DomainError.toOptionalMessage error with

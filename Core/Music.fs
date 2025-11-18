@@ -25,6 +25,7 @@ let private filterDirectoriesWithoutAudio (directories: seq<string>)
         directories
         |> Seq.filter (hasAudioFiles >> not)
         |> Seq.toList
+        |> List.sort  // Sort alphabetically for consistent ordering
     
     if List.isEmpty orphanedDirs then
         Error (NothingToClean "No directories without audio files")

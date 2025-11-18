@@ -132,7 +132,9 @@ let clean (path: string) (previewMode: PreviewMode)
             Logging.logInfo ""
         
         // Combine folders and subtitle files
-        let allItemsToDelete = Seq.append foldersToDelete subtitlesToDelete
+        let allItemsToDelete = 
+            Seq.append foldersToDelete subtitlesToDelete
+            |> Seq.sort  // Sort alphabetically so related items appear together
         
         if Seq.isEmpty allItemsToDelete then
             // Update last run even if nothing to delete
