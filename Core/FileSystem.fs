@@ -12,19 +12,18 @@ let logFileName = "cleanLog.log"
 // Directory Filtering
 // ============================================================================
 
-/// Check if a directory should be filtered out from deletion consideration
+/// Check if a directory is a special directory that should be excluded from operations
 /// These directories are never evaluated for deletion themselves
 /// Their fate is determined by their parent folder's size/content
 /// Examples: .actors, .nfo, extrafanart
-let shouldFilterDirectory (dirName: string) : bool =
+let private isSpecialDirectory (dirName: string) : bool =
     dirName.StartsWith(".") || 
     String.Equals(dirName, "extrafanart", StringComparison.OrdinalIgnoreCase)
 
 /// Check if a directory should be skipped when recursing to find files
 /// Used when looking FOR files inside directories (not AT the directories themselves)
-/// Same logic as shouldFilterDirectory but takes DirectoryInfo for convenience
 let shouldSkipDirectory (dirInfo: DirectoryInfo) : bool =
-    shouldFilterDirectory dirInfo.Name
+    isSpecialDirectory dirInfo.Name
 
 // ============================================================================
 // Core Directory Operations
@@ -37,7 +36,7 @@ let getSubdirectories (searchOption: SearchOption) (path: ValidatedPath)
         let pathStr = ValidatedPath.value path
         let directories = 
             DirectoryInfo(pathStr).EnumerateDirectories("*.*", searchOption)
-            |> Seq.filter (fun di -> not (shouldFilterDirectory di.Name))
+            |> Seq.filter (fun di -> not (isSpecialDirectory di.Name))
             |> Seq.map ExistingDirectory.fromDirectoryInfo
         
         if Seq.isEmpty directories then

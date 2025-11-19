@@ -9,32 +9,31 @@ open System.IO
 
 /// Simple console logging for informational messages
 let logInfo message =
-    printfn "[INFO] %s" message
+    printfn $"[INFO] {message}"
 
 /// Log cleaned items to file with custom format
 let logListToFile (logFilePath: string) (list: seq<string>) = 
     try
         let timestamp = DateTime.Now.ToString("yyyy-MMM-dd HH:mm:ss")
-        let header = sprintf "Cleaned on: %s" timestamp
+        let header = $"Cleaned on: {timestamp}"
         let separator = "---------------------------------------"
         
         let items = 
             list 
-            |> Seq.map (fun path -> sprintf "    %s" path)
+            |> Seq.map (fun path -> $"    {path}")
             |> String.concat Environment.NewLine
         
         let logEntry = 
-            sprintf "%s%s%s%s%s%s%s" 
-                header 
-                Environment.NewLine 
-                separator 
-                Environment.NewLine 
-                items 
-                Environment.NewLine
-                Environment.NewLine
+            String.concat Environment.NewLine [
+                header
+                separator
+                items
+                ""  // Extra newline at end
+                ""  // Extra newline for separation between entries
+            ]
         
         // Append to file (create if doesn't exist)
         File.AppendAllText(logFilePath, logEntry)
     with
     | ex ->
-        eprintfn "Failed to write to log file: %s" ex.Message
+        eprintfn $"Failed to write to log file: {ex.Message}"

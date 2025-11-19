@@ -277,20 +277,20 @@ module DomainError =
         | ValidationError ve ->
             match ve with
             | PathEmpty -> "Path cannot be empty"
-            | PathNotFound path -> sprintf "Directory not found: %s" path
-            | PathNotDirectory path -> sprintf "Path is not a directory: %s" path
+            | PathNotFound path -> $"Directory not found: {path}"
+            | PathNotDirectory path -> $"Path is not a directory: {path}"
         
         | DirectoryError de ->
             match de with
-            | NoSubdirectories path -> sprintf "No subdirectories found in: %s" path
-            | NoLeafNodes path -> sprintf "No leaf nodes found in: %s" path
-            | NoFilesFound path -> sprintf "No files found in: %s" path
-            | AccessDenied (path, ex) -> sprintf "Access denied to: %s (%s)" path ex.Message
+            | NoSubdirectories path -> $"No subdirectories found in: {path}"
+            | NoLeafNodes path -> $"No leaf nodes found in: {path}"
+            | NoFilesFound path -> $"No files found in: {path}"
+            | AccessDenied (path, ex) -> $"Access denied to: {path} ({ex.Message})"
         
         | CleaningError ce ->
             match ce with
-            | NothingToClean reason -> sprintf "Nothing to clean: %s" reason
-            | DeletionFailed (path, ex) -> sprintf "Failed to delete: %s (%s)" path ex.Message
+            | NothingToClean reason -> $"Nothing to clean: {reason}"
+            | DeletionFailed (path, ex) -> $"Failed to delete: {path} ({ex.Message})"
     
     /// Convert to an optional message (empty for non-critical errors)
     let toOptionalMessage error =
@@ -335,10 +335,6 @@ module FilePatterns =
 // ============================================================================
 
 module Result =
-    /// Convert a domain error to another error type
-    let mapError f result =
-        Result.mapError f result
-    
     /// Lift a validation error to a domain error
     let liftValidationError result =
         result |> Result.mapError ValidationError
@@ -350,9 +346,6 @@ module Result =
     /// Lift a cleaning error to a domain error
     let liftCleaningError result =
         result |> Result.mapError CleaningError
-    
-    /// Perform side effect only on success (from FsToolkit.ErrorHandling)
-    /// This is now available as Result.tee from the library
     
     /// Perform side effect only when condition is true
     let teeIf condition f result =

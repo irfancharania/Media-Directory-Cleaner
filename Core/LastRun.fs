@@ -36,7 +36,7 @@ let saveLastRunDate (basePath: string) : Result<unit, string> =
         File.WriteAllText(filePath, nowUtc)
         Ok ()
     with
-    | ex -> Error (sprintf "Failed to save last run date: %s" ex.Message)
+    | ex -> Error $"Failed to save last run date: {ex.Message}"
 
 /// Check if a directory has been modified since the last run
 /// Returns true if:

@@ -6,8 +6,8 @@ open System.Text.RegularExpressions
 open FsToolkit.ErrorHandling
 open Domain
 open FileSystem
-open Utility
 open Size
+open Utility
 
 let ThresholdSizeMB = 100L<MB>
 
@@ -62,9 +62,14 @@ let private findOrphanedFiles (mainFiles: seq<ExistingFile>) (extraFiles: seq<Ex
                 |> not)
         |> Seq.map (fun f -> f.FullPath)
 
+/// Classification result for a directory
+type DirectoryClassification =
+    | HasVideos of orphanedFiles: string list
+    | NoVideos of directoryPath: string
+
 /// Get orphaned files from a single directory (season folder)
-/// Also returns whether the directory has any video files
-let private processDirectory (dir: string) : bool * seq<string> =
+/// Returns classification indicating whether directory has video files
+let private processDirectory (dir: string) : DirectoryClassification =
     // Get files, but skip .actors and other dot-prefixed subdirectories
     let currentFiles = getFiles dir
     
@@ -79,28 +84,34 @@ let private processDirectory (dir: string) : bool * seq<string> =
     let allFiles = Seq.append currentFiles subDirFiles
     let mainFiles, extraFiles = partitionFiles allFiles
     
-    let hasVideoFiles = not (Seq.isEmpty mainFiles)
-    let orphanedFiles = findOrphanedFiles mainFiles extraFiles
-    
-    (hasVideoFiles, orphanedFiles)
+    if Seq.isEmpty mainFiles then
+        NoVideos dir
+    else
+        let orphanedFiles = findOrphanedFiles mainFiles extraFiles |> Seq.toList
+        HasVideos orphanedFiles
 
 /// Get orphaned files from all subdirectories
 /// Returns both orphaned files and empty directories to delete
 let private getOrphanedItems (directories: seq<string>) 
     : Result<seq<string>, CleaningError> =
     
-    let mutable allOrphans = []
-    let mutable emptyDirs = []
+    let processedDirs =
+        directories
+        |> Seq.map processDirectory
+        |> Seq.toList
     
-    for dir in directories do
-        let hasVideoFiles, orphanedFiles = processDirectory dir
-        
-        // If directory has no video files, mark entire directory for deletion
-        if not hasVideoFiles then
-            emptyDirs <- dir :: emptyDirs
-        else
-            // Otherwise, just collect orphaned files
-            allOrphans <- List.append allOrphans (orphanedFiles |> Seq.toList)
+    let allOrphans = 
+        processedDirs 
+        |> List.choose (function 
+            | HasVideos files -> Some files 
+            | _ -> None)
+        |> List.concat
+    
+    let emptyDirs = 
+        processedDirs 
+        |> List.choose (function 
+            | NoVideos dir -> Some dir 
+            | _ -> None)
     
     let allItemsToDelete = 
         List.append allOrphans emptyDirs

@@ -1,19 +1,14 @@
 ﻿module Utility
 
-// http://www.fssnip.net/4K
-// Partition that returns two sequences
-let partition condition values = 
-    let pairs = 
-        seq { 
-            for i in values do
-                if condition i then yield Some(i), None
-                else yield None, Some(i)
-        }
-    pairs |> Seq.choose fst, pairs |> Seq.choose snd
+// ============================================================================
+// Sequence Utilities
+// ============================================================================
 
-// Additional Seq.partition for better naming consistency
-// Returns tuple of sequences matching F# List.partition signature
+/// Seq.partition for better naming consistency
+/// Returns tuple of sequences matching F# List.partition signature
 module Seq =
+    /// Partition a sequence based on a predicate
+    /// Returns (matching, not matching) sequences
     let partition predicate source =
         let pairs = 
             seq { 
@@ -23,7 +18,12 @@ module Seq =
             }
         pairs |> Seq.choose fst, pairs |> Seq.choose snd
 
+// ============================================================================
+// Date/Time Types
+// ============================================================================
+
 type LocalDateTime = 
     | LocalDateTime of System.DateTime
 
-let formatLocalDateTime formatString (LocalDateTime dt) = dt.ToString(format = formatString)
+let formatLocalDateTime formatString (LocalDateTime dt) = 
+    dt.ToString(format = formatString)

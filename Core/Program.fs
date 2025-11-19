@@ -4,19 +4,26 @@ open Argu
 open Domain
 
 // ============================================================================
-// CLI Argument Definitions using Argu (Simplified)
+// CLI Argument Definitions using Argu
 // ============================================================================
 
 type CleanMode =
-    | Tv
-    | Movies
-    | Music
+    | [<First; ExactlyOnce>] Tv
+    | [<First; ExactlyOnce>] Movies
+    | [<First; ExactlyOnce>] Music
+
+    interface IArgParserTemplate with
+        member this.Usage =
+            match this with
+            | Tv -> "clean TV show directories"
+            | Movies -> "clean movie directories"
+            | Music -> "clean music directories"
 
 type CliArguments =
-    | [<AltCommandLine("-p") ; Unique ; Mandatory>] Path of string
-    | [<AltCommandLine("-m") ; Unique ; Mandatory>] Mode of CleanMode
+    | [<AltCommandLine("-p"); Unique; Mandatory>] Path of string
     | [<Unique>] Execute
-    
+    | Mode of CleanMode
+
     interface IArgParserTemplate with
         member this.Usage =
             match this with
@@ -36,9 +43,9 @@ let printColored color text =
 
 let printItem item =
     if Directory.Exists(item) then
-        printColored ConsoleColor.Yellow (sprintf "  %s" item)
+        printColored ConsoleColor.Yellow $"  {item}"
     else
-        printColored ConsoleColor.White (sprintf "  %s" item)
+        printColored ConsoleColor.White $"  {item}"
 
 // ============================================================================
 // Application Logic
@@ -64,19 +71,11 @@ let runClean (cleanFn: string -> PreviewMode -> Result<seq<string>, DomainError>
     | Error error ->
         match Domain.DomainError.toOptionalMessage error with
         | Some msg -> 
-            eprintfn "Error: %s" msg
+            eprintfn $"Error: {msg}"
             1
         | None -> 
             printfn "Nothing to clean."
             0
-
-let printVersion() =
-    let assembly = Reflection.Assembly.GetExecutingAssembly()
-    let version = assembly.GetName().Version
-    let name = assembly.GetName().Name
-    printfn "%s v%s" name (version.ToString(3))
-    printfn "Kodi/XBMC Media Directory Cleaner"
-    0
 
 // ============================================================================
 // Entry Point
@@ -87,14 +86,13 @@ let main argv =
     let errorHandler = ProcessExiter(colorizer = function ErrorCode.HelpText -> None | _ -> Some ConsoleColor.Red)
     let parser = ArgumentParser.Create<CliArguments>(programName = "DirectoryCleaner.exe", errorHandler = errorHandler)
     
-    // Show version in help header
     let assembly = Reflection.Assembly.GetExecutingAssembly()
     let version = assembly.GetName().Version
     let versionString = version.ToString(3)
     
     // If no arguments, show usage with version and exit
     if argv.Length = 0 then
-        printfn "DirectoryCleaner v%s - Kodi/XBMC Media Directory Cleaner" versionString
+        printfn $"DirectoryCleaner v{versionString} - Kodi/XBMC Media Directory Cleaner"
         printfn ""
         printfn "%s" (parser.PrintUsage())
         0
@@ -114,13 +112,13 @@ let main argv =
                 // Select cleaning function based on mode
                 let cleanFn = 
                     match mode with
-                    | Tv -> TVShows.clean
-                    | Movies -> Movies.clean
-                    | Music -> Music.clean
+                    | CleanMode.Tv -> TVShows.clean
+                    | CleanMode.Movies -> Movies.clean
+                    | CleanMode.Music -> Music.clean
                     
                 runClean cleanFn path previewMode
             | None, _ ->
-                eprintfn "Error: --mode is required for cleaning operations"
+                eprintfn "Error: mode is required for cleaning operations"
                 printfn ""
                 printfn "%s" (parser.PrintUsage())
                 1
@@ -136,5 +134,5 @@ let main argv =
             printfn "%s" (parser.PrintUsage())
             1
         | ex ->
-            eprintfn "Unexpected error: %s" ex.Message
+            eprintfn $"Unexpected error: {ex.Message}"
             1
