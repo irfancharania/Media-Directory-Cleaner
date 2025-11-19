@@ -7,27 +7,22 @@ open Domain
 // CLI Argument Definitions using Argu SubCommands
 // ============================================================================
 
-type CleanArgs =
-    | [<AltCommandLine("-p"); Mandatory; Unique>] Path of string
+type CleanMode =
+    | Tv
+    | Movies
+    | Music
+
+type CliArguments =
+    | [<MainCommand; ExactlyOnce>] Mode of CleanMode
+    | [<AltCommandLine("-p") ; Unique ; Mandatory>] Path of string
     | [<Unique>] Execute
     
     interface IArgParserTemplate with
         member this.Usage =
             match this with
+            | Mode _ -> "cleaning mode: tv, movies, or music"
             | Path _ -> "specify the directory path to clean"
             | Execute -> "execute mode - actually delete items (default is preview only)"
-
-type CliArguments =
-    | [<CliPrefix(CliPrefix.None)>] Movies of ParseResults<CleanArgs>
-    | [<CliPrefix(CliPrefix.None)>] Tv of ParseResults<CleanArgs>
-    | [<CliPrefix(CliPrefix.None)>] Music of ParseResults<CleanArgs>
-    
-    interface IArgParserTemplate with
-        member this.Usage =
-            match this with
-            | Movies _ -> "clean movie directories"
-            | Tv _ -> "clean TV show directories"
-            | Music _ -> "clean music directories"
 
 // ============================================================================
 // Console Color Helpers
@@ -35,15 +30,17 @@ type CliArguments =
 
 let printColored color text =
     let oldColor = Console.ForegroundColor
-    Console.ForegroundColor <- color
-    printfn "%s" text
-    Console.ForegroundColor <- oldColor
+    try
+        Console.ForegroundColor <- color
+        printfn "%s" text
+    finally
+        Console.ForegroundColor <- oldColor
 
 let printItem item =
     match item with
-    | Domain.DeletableItem.Directory path ->
+    | DeletableItem.Directory path ->
         printColored ConsoleColor.Yellow $"  {path}"
-    | Domain.DeletableItem.File path ->
+    | DeletableItem.File path ->
         printColored ConsoleColor.White $"  {path}"
 
 // ============================================================================
@@ -98,35 +95,22 @@ let main argv =
     else
         try
             let results = parser.ParseCommandLine(inputs = argv, raiseOnUsage = true)
-            
-            // Pattern match on the subcommand to extract path and execute flag
-            match results.GetAllResults() with
-            | [Movies cleanArgs] ->
-                let path = cleanArgs.GetResult(CleanArgs.Path)
-                let previewMode = if cleanArgs.Contains(CleanArgs.Execute) then Domain.Execute else Domain.Preview
-                runClean Movies.clean path previewMode
-                
-            | [Tv cleanArgs] ->
-                let path = cleanArgs.GetResult(CleanArgs.Path)
-                let previewMode = if cleanArgs.Contains(CleanArgs.Execute) then Domain.Execute else Domain.Preview
-                runClean TVShows.clean path previewMode
-                
-            | [Music cleanArgs] ->
-                let path = cleanArgs.GetResult(CleanArgs.Path)
-                let previewMode = if cleanArgs.Contains(CleanArgs.Execute) then Domain.Execute else Domain.Preview
-                runClean Music.clean path previewMode
-                
-            | [] ->
-                eprintfn "Error: Please specify a command (movies, tv, or music)"
-                printfn ""
-                printfn "%s" (parser.PrintUsage())
-                1
-                
-            | _ ->
-                eprintfn "Error: Please specify only one command"
-                printfn ""
-                printfn "%s" (parser.PrintUsage())
-                1
+            let mode = results.GetResult(Mode)
+            let path = results.GetResult(Path)
+
+            // Select cleaning function based on mode
+            let cleanFn = 
+                match mode with
+                | Tv -> TVShows.clean
+                | Movies -> Movies.clean
+                | Music -> Music.clean
+
+            let previewMode = 
+                if results.Contains(Execute) then 
+                    Domain.Execute 
+                else 
+                    Domain.Preview
+            runClean cleanFn path previewMode
         with
         | :? ArguParseException as ex ->
             printfn "%s" ex.Message
