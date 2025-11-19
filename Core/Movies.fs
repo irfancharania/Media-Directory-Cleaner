@@ -41,7 +41,7 @@ let private classifySubtitle (file: ExistingFile) (dirFiles: seq<ExistingFile>) 
 
 /// Find and classify subtitle files in directories (single pass)
 /// Returns (filesToDelete, uncertainFiles)
-let private classifySubtitles (directories: seq<string>) : seq<string> * seq<string> =
+let private classifySubtitles (directories: seq<string>) : seq<DeletableItem> * seq<string> =
     let allSubtitles =
         directories
         |> Seq.collect (fun dir ->
@@ -75,7 +75,7 @@ let private classifySubtitles (directories: seq<string>) : seq<string> * seq<str
     
     let toDelete = 
         allSubtitles 
-        |> List.choose (function ToDelete path -> Some path | _ -> None)
+        |> List.choose (function ToDelete path -> Some (DeletableItem.fromFile path) | _ -> None)
     
     let uncertain = 
         allSubtitles 
@@ -100,7 +100,7 @@ let private logUncertainSubtitles (uncertainSubtitles: seq<string>) : unit =
 
 /// Clean movie directories - delete small folders and unwanted subtitles
 let clean (path: string) (previewMode: PreviewMode) 
-    : Result<seq<string>, DomainError> =
+    : Result<seq<DeletableItem>, DomainError> =
     
     let logFilePath = Path.Combine(path, logFileName)
     let isExecute = (previewMode = Execute)
@@ -129,6 +129,7 @@ let clean (path: string) (previewMode: PreviewMode)
             dirsToCheck 
             |> filterDirectoriesBySize 
             |> Result.defaultValue Seq.empty
+            |> Seq.map DeletableItem.fromDirectory
         
         // Classify subtitles in changed directories (single pass)
         let subtitlesToDelete, uncertainSubtitles = classifySubtitles dirsToCheck
@@ -140,7 +141,7 @@ let clean (path: string) (previewMode: PreviewMode)
         // Combine folders and subtitle files
         let allItemsToDelete = 
             Seq.append foldersToDelete subtitlesToDelete
-            |> Seq.sort  // Sort alphabetically so related items appear together
+            |> Seq.sortBy DeletableItem.path  // Sort alphabetically so related items appear together
         
         if Seq.isEmpty allItemsToDelete then
             // Update last run even if nothing to delete
@@ -149,27 +150,37 @@ let clean (path: string) (previewMode: PreviewMode)
             Error (CleaningError (NothingToClean "No directories or subtitles to clean"))
         else
             if isExecute then
-                // Log everything
-                Logging.logListToFile logFilePath allItemsToDelete
+                // Log everything (extract paths for logging)
+                let pathsToLog = allItemsToDelete |> Seq.map DeletableItem.path
+                Logging.logListToFile logFilePath pathsToLog
+                
+                // Separate by type for deletion
+                let folders = 
+                    allItemsToDelete 
+                    |> Seq.choose (function DeletableItem.Directory path -> Some path | _ -> None)
+                
+                let files = 
+                    allItemsToDelete 
+                    |> Seq.choose (function DeletableItem.File path -> Some path | _ -> None)
                 
                 // Delete folders
                 let folderResult = 
-                    if Seq.isEmpty foldersToDelete then 
+                    if Seq.isEmpty folders then 
                         Ok ()
                     else
-                        deleteDirectories foldersToDelete 
+                        deleteDirectories folders 
                         |> Result.liftCleaningError
                 
                 // Delete subtitle files
-                let subtitleResult =
-                    if Seq.isEmpty subtitlesToDelete then
+                let fileResult =
+                    if Seq.isEmpty files then
                         Ok ()
                     else
-                        deleteFiles subtitlesToDelete
+                        deleteFiles files
                         |> Result.liftCleaningError
                 
                 // Update last run date on success
-                match folderResult, subtitleResult with
+                match folderResult, fileResult with
                 | Ok _, Ok _ -> 
                     LastRun.saveLastRunDate path |> ignore
                     Ok allItemsToDelete

@@ -39,11 +39,11 @@ let private normalizeFileName (fileName: string) =
 
 /// Find orphaned extra files (no corresponding main video file)
 let private findOrphanedFiles (mainFiles: seq<ExistingFile>) (extraFiles: seq<ExistingFile>) 
-    : seq<string> =
+    : seq<DeletableItem> =
     
     // If no main files, all extra files are orphans
     if Seq.isEmpty mainFiles then
-        extraFiles |> Seq.map (fun f -> f.FullPath)
+        extraFiles |> Seq.map (fun f -> DeletableItem.fromFile f.FullPath)
     else
         let mainFileNames =
             mainFiles
@@ -60,11 +60,11 @@ let private findOrphanedFiles (mainFiles: seq<ExistingFile>) (extraFiles: seq<Ex
                 mainFileNames
                 |> Set.exists (fun mainName -> mainName.Contains(normalizedName))
                 |> not)
-        |> Seq.map (fun f -> f.FullPath)
+        |> Seq.map (fun f -> DeletableItem.fromFile f.FullPath)
 
 /// Classification result for a directory
 type DirectoryClassification =
-    | HasVideos of orphanedFiles: string list
+    | HasVideos of orphanedFiles: DeletableItem list
     | NoVideos of directoryPath: string
 
 /// Get orphaned files from a single directory (season folder)
@@ -93,7 +93,7 @@ let private processDirectory (dir: string) : DirectoryClassification =
 /// Get orphaned files from all subdirectories
 /// Returns both orphaned files and empty directories to delete
 let private getOrphanedItems (directories: seq<string>) 
-    : Result<seq<string>, CleaningError> =
+    : Result<seq<DeletableItem>, CleaningError> =
     
     let processedDirs =
         directories
@@ -110,12 +110,12 @@ let private getOrphanedItems (directories: seq<string>)
     let emptyDirs = 
         processedDirs 
         |> List.choose (function 
-            | NoVideos dir -> Some dir 
+            | NoVideos dir -> Some (DeletableItem.fromDirectory dir)
             | _ -> None)
     
     let allItemsToDelete = 
         List.append allOrphans emptyDirs
-        |> List.sort  // Sort alphabetically so related items appear together
+        |> List.sortBy DeletableItem.path  // Sort alphabetically so related items appear together
     
     if List.isEmpty allItemsToDelete then
         Error (NothingToClean "No orphaned files or empty directories found")
@@ -124,7 +124,7 @@ let private getOrphanedItems (directories: seq<string>)
 
 /// Clean TV show directories
 let clean (path: string) (previewMode: PreviewMode) 
-    : Result<seq<string>, DomainError> =
+    : Result<seq<DeletableItem>, DomainError> =
     
     let logFilePath = Path.Combine(path, logFileName)
     let isExecute = (previewMode = Execute)
@@ -134,12 +134,17 @@ let clean (path: string) (previewMode: PreviewMode)
     |> Result.bind (getAllSubdirectories >> Result.liftDirectoryError)
     |> Result.bind (filterToLeafNodes >> Result.liftDirectoryError)
     |> Result.bind (getOrphanedItems >> Result.liftCleaningError)
-    |> Result.teeIf isExecute (Logging.logListToFile logFilePath)
+    |> Result.teeIf isExecute (fun items -> 
+        Logging.logListToFile logFilePath (items |> Seq.map DeletableItem.path))
     |> Result.bind (fun toDelete ->
         if isExecute then
             // Separate files from directories
-            let files = toDelete |> Seq.filter File.Exists
-            let dirs = toDelete |> Seq.filter Directory.Exists
+            let files = 
+                toDelete 
+                |> Seq.choose (function DeletableItem.File path -> Some path | _ -> None)
+            let dirs = 
+                toDelete 
+                |> Seq.choose (function DeletableItem.Directory path -> Some path | _ -> None)
             
             // Delete files first
             let fileResult = 

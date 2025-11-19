@@ -9,6 +9,24 @@ open Size
 // Domain Types - Making illegal states unrepresentable
 // ============================================================================
 
+/// Items that can be deleted - we track what they are from the start
+type DeletableItem =
+    | File of path: string
+    | Directory of path: string
+    
+module DeletableItem =
+    /// Get the path regardless of item type
+    let path item =
+        match item with
+        | File path -> path
+        | Directory path -> path
+    
+    /// Create from a file path
+    let fromFile path = File path
+    
+    /// Create from a directory path
+    let fromDirectory path = Directory path
+
 /// A validated directory path that is guaranteed to exist
 type ValidatedPath = private ValidatedPath of string
 

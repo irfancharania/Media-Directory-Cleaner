@@ -40,16 +40,17 @@ let printColored color text =
     Console.ForegroundColor <- oldColor
 
 let printItem item =
-    if Directory.Exists(item) then
-        printColored ConsoleColor.Yellow $"  {item}"
-    else
-        printColored ConsoleColor.White $"  {item}"
+    match item with
+    | Domain.DeletableItem.Directory path ->
+        printColored ConsoleColor.Yellow $"  {path}"
+    | Domain.DeletableItem.File path ->
+        printColored ConsoleColor.White $"  {path}"
 
 // ============================================================================
 // Application Logic
 // ============================================================================
 
-let runClean (cleanFn: string -> PreviewMode -> Result<seq<string>, DomainError>) 
+let runClean (cleanFn: string -> PreviewMode -> Result<seq<DeletableItem>, DomainError>) 
              (path: string)
              (previewMode: PreviewMode) =
     match cleanFn path previewMode with

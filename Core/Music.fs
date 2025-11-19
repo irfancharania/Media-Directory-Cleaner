@@ -19,13 +19,14 @@ let private hasAudioFiles (path: string) : bool =
 
 /// Filter directories that have no audio files
 let private filterDirectoriesWithoutAudio (directories: seq<string>) 
-    : Result<seq<string>, CleaningError> =
+    : Result<seq<DeletableItem>, CleaningError> =
     
     let orphanedDirs =
         directories
         |> Seq.filter (hasAudioFiles >> not)
+        |> Seq.map DeletableItem.fromDirectory
         |> Seq.toList
-        |> List.sort  // Sort alphabetically for consistent ordering
+        |> List.sortBy DeletableItem.path  // Sort alphabetically for consistent ordering
     
     if List.isEmpty orphanedDirs then
         Error (NothingToClean "No directories without audio files")
@@ -34,7 +35,7 @@ let private filterDirectoriesWithoutAudio (directories: seq<string>)
 
 /// Clean music directories
 let clean (path: string) (previewMode: PreviewMode) 
-    : Result<seq<string>, DomainError> =
+    : Result<seq<DeletableItem>, DomainError> =
     
     let logFilePath = Path.Combine(path, logFileName)
     let isExecute = (previewMode = Execute)
@@ -44,10 +45,12 @@ let clean (path: string) (previewMode: PreviewMode)
     |> Result.bind (getAllSubdirectories >> Result.liftDirectoryError)
     |> Result.bind (filterToLeafNodes >> Result.liftDirectoryError)
     |> Result.bind (filterDirectoriesWithoutAudio >> Result.liftCleaningError)
-    |> Result.teeIf isExecute (Logging.logListToFile logFilePath)
+    |> Result.teeIf isExecute (fun items -> 
+        Logging.logListToFile logFilePath (items |> Seq.map DeletableItem.path))
     |> Result.bind (fun toDelete ->
         if isExecute then
-            deleteDirectories toDelete 
+            let dirs = toDelete |> Seq.map DeletableItem.path
+            deleteDirectories dirs 
             |> Result.liftCleaningError
             |> Result.map (fun () -> toDelete)
         else
