@@ -4,32 +4,30 @@ open Argu
 open Domain
 
 // ============================================================================
-// CLI Argument Definitions using Argu
+// CLI Argument Definitions using Argu SubCommands
 // ============================================================================
 
-type CleanMode =
-    | [<First; ExactlyOnce>] Tv
-    | [<First; ExactlyOnce>] Movies
-    | [<First; ExactlyOnce>] Music
-
-    interface IArgParserTemplate with
-        member this.Usage =
-            match this with
-            | Tv -> "clean TV show directories"
-            | Movies -> "clean movie directories"
-            | Music -> "clean music directories"
-
-type CliArguments =
-    | [<AltCommandLine("-p"); Unique; Mandatory>] Path of string
+type CleanArgs =
+    | [<AltCommandLine("-p"); Mandatory; Unique>] Path of string
     | [<Unique>] Execute
-    | Mode of CleanMode
-
+    
     interface IArgParserTemplate with
         member this.Usage =
             match this with
             | Path _ -> "specify the directory path to clean"
-            | Mode _ -> "cleaning mode: tv, movies, or music"
             | Execute -> "execute mode - actually delete items (default is preview only)"
+
+type CliArguments =
+    | [<CliPrefix(CliPrefix.None)>] Movies of ParseResults<CleanArgs>
+    | [<CliPrefix(CliPrefix.None)>] Tv of ParseResults<CleanArgs>
+    | [<CliPrefix(CliPrefix.None)>] Music of ParseResults<CleanArgs>
+    
+    interface IArgParserTemplate with
+        member this.Usage =
+            match this with
+            | Movies _ -> "clean movie directories"
+            | Tv _ -> "clean TV show directories"
+            | Music _ -> "clean music directories"
 
 // ============================================================================
 // Console Color Helpers
@@ -100,30 +98,31 @@ let main argv =
         try
             let results = parser.ParseCommandLine(inputs = argv, raiseOnUsage = true)
             
-            // Get required arguments for cleaning operations
-            match results.TryGetResult(Mode), results.TryGetResult(Path) with
-            | Some mode, Some path ->
-                let previewMode = 
-                    if results.Contains(Execute) then 
-                        Domain.Execute 
-                    else 
-                        Domain.Preview
-                    
-                // Select cleaning function based on mode
-                let cleanFn = 
-                    match mode with
-                    | CleanMode.Tv -> TVShows.clean
-                    | CleanMode.Movies -> Movies.clean
-                    | CleanMode.Music -> Music.clean
-                    
-                runClean cleanFn path previewMode
-            | None, _ ->
-                eprintfn "Error: mode is required for cleaning operations"
+            // Pattern match on the subcommand to extract path and execute flag
+            match results.GetAllResults() with
+            | [Movies cleanArgs] ->
+                let path = cleanArgs.GetResult(CleanArgs.Path)
+                let previewMode = if cleanArgs.Contains(CleanArgs.Execute) then Domain.Execute else Domain.Preview
+                runClean Movies.clean path previewMode
+                
+            | [Tv cleanArgs] ->
+                let path = cleanArgs.GetResult(CleanArgs.Path)
+                let previewMode = if cleanArgs.Contains(CleanArgs.Execute) then Domain.Execute else Domain.Preview
+                runClean TVShows.clean path previewMode
+                
+            | [Music cleanArgs] ->
+                let path = cleanArgs.GetResult(CleanArgs.Path)
+                let previewMode = if cleanArgs.Contains(CleanArgs.Execute) then Domain.Execute else Domain.Preview
+                runClean Music.clean path previewMode
+                
+            | [] ->
+                eprintfn "Error: Please specify a command (movies, tv, or music)"
                 printfn ""
                 printfn "%s" (parser.PrintUsage())
                 1
-            | _, None ->                    
-                eprintfn "Error: --path is required for cleaning operations"
+                
+            | _ ->
+                eprintfn "Error: Please specify only one command"
                 printfn ""
                 printfn "%s" (parser.PrintUsage())
                 1
