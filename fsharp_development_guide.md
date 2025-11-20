@@ -1,14 +1,10 @@
 F# Development Guide
 
-> This document provides context for AI assistants (Claude, GitHub Copilot, etc.) working on this F# project. It defines architectural principles, coding standards, and project-specific patterns.
+> This document provides context for AI assistants working on this F# project. It defines architectural principles, coding standards, and project-specific patterns.
 
 ## Project Context
 
-**Purpose:** Tool to help keep Kodi/XBMC media directories clean.
-
-Using supplemental tools like Media Companion, users can download media meta content (such as artwork and subtitles) and store it locally. Kodi/XBMC won't scrape the internet if the information it needs is present locally alongside the media.
-
-Unfortunately, when media is deleted from within the Kodi/XBMC interface, the local meta files are left behind on the file system. Hence, the need for this tool.
+**Purpose:** Tool to help keep Kodi/XBMC media directories clean by removing orphaned metadata files left after media deletion.
 
 **Target Framework:** .NET 10 / F# 10
 
@@ -17,10 +13,12 @@ Unfortunately, when media is deleted from within the Kodi/XBMC interface, the lo
 ### 1. Domain-Driven Design (DDD)
 We follow tactical DDD patterns with clear layer separation:
 
-- **Domain Layer** - Pure business logic, no infrastructure dependencies
-- **Infrastructure Layer** - I/O operations, external service integration
+- **Domain Layer** - Pure business logic, no I/O or infrastructure dependencies
+- **Infrastructure Layer** - I/O operations (file system, external services)
 - **Application Layer** - Workflow orchestration, use case coordination
 - **Entry Point** - Minimal Program.fs that delegates to application layer
+
+**Critical:** Domain layer must never perform I/O directly. Use infrastructure layer for all file system operations.
 
 ### 2. Railway-Oriented Programming (ROP)
 Error handling follows Scott Wlaschin's Railway-Oriented Programming:
@@ -32,7 +30,7 @@ Error handling follows Scott Wlaschin's Railway-Oriented Programming:
 
 ### 3. Functional Core, Imperative Shell
 - **Pure functions** - All domain logic, calculations, transformations
-- **I/O at boundaries** - File, database, HTTP operations wrapped in Result
+- **I/O at boundaries** - File, database, HTTP operations in infrastructure layer, wrapped in Result
 - **Side effects at edges** - Logging, telemetry only at pipeline endpoints
 
 ### 4. Type-Driven Design
@@ -40,26 +38,32 @@ Error handling follows Scott Wlaschin's Railway-Oriented Programming:
 - Use single-case discriminated unions for type safety
 - Smart constructors with validation return `Result<T, Error>`
 - Private constructors prevent invalid instances
+- Use `internal` for infrastructure-only constructors
 
 ## Technology Stack
 
 ### Core Libraries
-- **FsToolkit.ErrorHandling** - utility library to work with the Result type in F#, and allows you to do clear, simple and powerful error handling
+- **FsToolkit.ErrorHandling** - utility library to work with the Result type in F#
 - **Argu** - declarative CLI argument parser for F# console applications
 
 ### Testing
-- **FsUnit** - F#-first unit testing framework
-- **Unquote** - Write F# unit test assertions as quoted expressions, get step-by-step failure messages for free
+- **Unquote** - F#-idiomatic assertions with quotations, provides step-by-step failure messages
+- **FsCheck** - Property-based testing for invariants and edge cases
 
 ## Coding Standards
 
 ### DO ✅
+
+** NuGet package/Library use **
+- Use built-in libraries where applicable (e.g. for email validation with System.Net.Mail.MailAddress)
+- Use standard libraries for functions where applicable (e.g. FsToolkit.ErrorHandling, Argu, etc)
 
 **Type Design**
 - Use constrained types for domain primitives
 - Single-case DUs for IDs and value objects
 - Smart constructors with validation
 - Explicit type annotations on public functions
+- Use `internal` constructors when type should only be created by infrastructure layer
 
 **Function Design**
 - Keep functions small (< 20 lines ideal)
@@ -67,30 +71,33 @@ Error handling follows Scott Wlaschin's Railway-Oriented Programming:
 - Pure functions for business logic
 - Descriptive names over anonymous lambdas
 - Prefer idiomatic F#
-- Prefer explicit piping over computation expressions for readability
+- **Prefer explicit piping over computation expressions** for readability
 - Strive for functional core, imperative shell
 
 **Error Handling**
 - Return `Result<T, Error>` for operations that can fail
-- Use computation expressions for readability
 - Handle all error cases explicitly
 - Never catch exceptions in domain logic
+- Isolate exception handling at I/O boundaries
 
 **Module Organization**
 - One module per file (except where it makes sense like Domain)
 - Public API at bottom of file
 - Private helpers at top
 - Clear separation of concerns
+- Group related functionality (e.g., CLI types in CliArguments.fs)
 
 **Testing**
 - Test pure functions without mocking
-- Property-based tests for business invariants
+- Use Unquote for clear, quotation-based assertions
+- Property-based tests (FsCheck) for business invariants
 - Integration tests for I/O boundaries
 - Mirror production structure in tests
+- Use test helpers for common fixtures
 
 ### DON'T ❌
 
-Don't generate summary or explanation documents unless I ask for it.
+**Never generate summary or explanation documents unless explicitly requested.**
 
 **Anti-Patterns**
 - Mix try-catch with Result types
@@ -98,6 +105,8 @@ Don't generate summary or explanation documents unless I ask for it.
 - Use exceptions for control flow
 - Create artificial wrapper types
 - Access mutable state in domain logic
+- **Perform I/O operations in domain layer** (use infrastructure layer)
+- Duplicate type definitions (use shared modules)
 
 **Code Smells**
 - Deeply nested if-else or match expressions
@@ -114,6 +123,31 @@ Don't generate summary or explanation documents unless I ask for it.
 
 ## Code Patterns
 
+### Layer Separation: Domain vs Infrastructure
+
+```fsharp
+// ❌ BAD - I/O in domain
+module ValidatedPath =
+    let create (path: string) : Result<ValidatedPath, ValidationError> =
+        if Directory.Exists(path) then  // ❌ I/O in domain!
+            Ok (ValidatedPath path)
+        else
+            Error (PathNotFound path)
+
+// ✅ GOOD - Pure domain, I/O in infrastructure
+// Domain.fs
+module ValidatedPath =
+    let internal createUnchecked (path: string) : ValidatedPath =
+        ValidatedPath path
+
+// FileSystem.fs (Infrastructure)
+let validatePath (path: string) : Result<ValidatedPath, ValidationError> =
+    if Directory.Exists(path) then  // ✅ I/O in infrastructure
+        Ok (ValidatedPath.createUnchecked path)
+    else
+        Error (PathNotFound path)
+```
+
 ### Smart Constructor Pattern
 ```fsharp
 type PostalCode = private PostalCode of string
@@ -123,10 +157,8 @@ type PostalCode = private PostalCode of string
                 Error "Postal code cannot be empty"
             else
                 let cleaned = value.Trim().ToUpperInvariant()
-                // Canadian postal code format: A1A 1A1
                 let pattern = System.Text.RegularExpressions.Regex(@"^[A-Z]\d[A-Z]\s?\d[A-Z]\d$")
                 if pattern.IsMatch(cleaned) then
-                    // Normalize format with space
                     let normalized =
                         if cleaned.Length = 6 then
                             cleaned.Insert(3, " ")
@@ -167,8 +199,8 @@ let processOrder (input: OrderInput) : Result<Order, OrderError> =
     |> Result.bind calculatePrice
     |> Result.bind createOrder
     |> Result.map enrichOrder
-    |> Result.teeError (fun err -> Log.Error("Order failed: {Error}", err))
-    |> Result.tee (fun order -> Log.Information("Order created: {Id}", order.Id))
+    |> Result.teeError (fun err -> Log.Error($"Order failed: {err}"))
+    |> Result.tee (fun order -> Log.Information($"Order created: {order.Id}"))
 ```
 
 ### Pure Function with I/O at Boundary
@@ -189,20 +221,27 @@ let private loadCustomer (id: CustomerId) : Result<Customer, DbError> =
         Error (DbError.LoadFailed ex.Message)
 ```
 
-### Computation Expression Usage
+### Type-Safe DeletableItem Pattern
 ```fsharp
-let createLocation data = result {
-    let! name = LocationName.Create data.Name
-    let! population = Population.Create data.Pop
-    let! coordinates = Coordinates.Create data.Lat data.Lon
+// Domain type captures what we know
+type DeletableItem =
+    | File of path: string
+    | Directory of path: string
 
-    return {
-        Id = LocationId.New()
-        Name = name
-        Population = population
-        Coordinates = coordinates
-    }
-}
+module DeletableItem =
+    let path item =
+        match item with
+        | File path -> path
+        | Directory path -> path
+
+    let fromFile path = File path
+    let fromDirectory path = Directory path
+
+// Usage preserves type information
+let items = [
+    DeletableItem.fromFile "movie.srt"
+    DeletableItem.fromDirectory "Empty Folder"
+]
 ```
 
 ## Error Handling Reference
@@ -229,103 +268,131 @@ let createLocation data = result {
 |> Result.defaultWith (fun error -> handleError error)
 ```
 
-### Common Utilities
-```fsharp
-// Partition results (not in FsToolkit.ErrorHandling)
-let partition (results: Result<'a, 'b> list) : 'a list * 'b list =
-    let oks = results |> List.choose Result.toOption
-    let errors = results |> List.choose (function Error e -> Some e | _ -> None)
-    (oks, errors)
-
-// Test helper
-let expectOk result msg =
-    match result with
-    | Ok value -> value
-    | Error err -> failtestf "%s: %A" msg err
-```
-
 ## Testing Guidelines
 
+### Unit Tests with Unquote
+```fsharp
+[<Fact>]
+let ``ValidatedPath combine works``() =
+    let basePath = ValidatedPath.createUnchecked "C:\\base"
+    let combined = ValidatedPath.combine basePath "sub"
+    test <@ combined = "C:\\base\\sub" @>
+
+[<Fact>]
+let ``DeletableItem distinguishes File from Directory``() =
+    let file = DeletableItem.File "path"
+    let dir = DeletableItem.Directory "path"
+    test <@ file <> dir @>
+```
+
+### Property-Based Tests with FsCheck
+```fsharp
+[<Property>]
+let ``English subtitles are never deleted`` (NonNull filename) =
+    let testFile = $"movie.eng.{filename}.srt"
+    not (Subtitle.shouldDelete testFile)
+
+[<Property>]
+let ``Language detection is case insensitive`` (NonNull code) =
+    let lower = $"movie.{code.ToLower()}.srt"
+    let upper = $"movie.{code.ToUpper()}.srt"
+    Subtitle.shouldDelete lower = Subtitle.shouldDelete upper
+```
+
+### Integration Tests with Test Helpers
+```fsharp
+[<Fact>]
+let ``Movie without video - entire folder deleted``() =
+    withTestDir (movieWithoutVideo "Test Movie") (fun testDir ->
+        let result = Movies.clean testDir Preview
+
+        match result with
+        | Ok items ->
+            let movieFolder = Path.Combine(testDir, "Test Movie")
+            test <@ containsDirectory movieFolder items @>
+        | Error _ ->
+            failwith "Should have found folder"
+    )
+```
 
 ## Development Workflow
 
 ### Build and Run
-```
-# Restore packages
-dotnet restore
-
+```bash
 # Build
 dotnet build
 
-# Run application
-dotnet run --project [ProjectName]
-
 # Run with arguments
-dotnet run --project [ProjectName] -- [args]
+dotnet run --project DirectoryCleaner.fsproj movies -p "Z:\Movies"
 
 # Watch mode
-dotnet watch run --project [ProjectName]
+dotnet watch run --project DirectoryCleaner.fsproj
 ```
 
 ### Testing
-```
+```bash
 # Run all tests
-dotnet run --project Tests/[ProjectName].Tests.fsproj
+dotnet test
 
-# Filter tests
-dotnet run --project Tests/[ProjectName].Tests.fsproj -- --filter "[pattern]"
+# Run specific test
+dotnet test --filter "FullyQualifiedName~SubtitleTests"
 
 # Watch mode
-dotnet watch --project Tests/[ProjectName].Tests.fsproj run
-
-# With detailed output
-dotnet run --project Tests/[ProjectName].Tests.fsproj -- --debug
-```
-
-### Code Quality
-```
-# Format code
-dotnet fantomas [file or directory]
-
-# Lint
-dotnet fsharplint lint [ProjectName].sln
+dotnet watch test
 ```
 
 ## Common Pitfalls
 
-### ❌ Mixing Error Handling Paradigms
+### ❌ I/O in Domain Layer
 ```fsharp
-// BAD - mixing try-catch with Result
-result {
-    try
-        let! value = someOperation()
-        return value
-    with ex ->
-        return! Error ex.Message
-}
+// BAD
+module ValidatedPath =
+    let create path =
+        if Directory.Exists(path) then  // ❌
+            Ok (ValidatedPath path)
+        else Error PathNotFound
 
-// GOOD - isolate exceptions at I/O boundary
-let someOperation() : Result<T, Error> =
-    try
-        // I/O operation
-        Ok result
-    with ex ->
-        Error (formatException ex)
+// GOOD
+// Domain.fs
+module ValidatedPath =
+    let internal createUnchecked path = ValidatedPath path
+
+// FileSystem.fs
+let validatePath path =
+    if Directory.Exists(path) then  // ✅
+        Ok (ValidatedPath.createUnchecked path)
+    else Error PathNotFound
 ```
 
 ### ❌ Side Effects in Pure Functions
 ```fsharp
-// BAD - logging in pure function
+// BAD
 let calculateTotal items =
-    Log.Information("Calculating total")  // ❌
+    Log.Information("Calculating")  // ❌
     items |> List.sumBy (_.Price)
 
-// GOOD - side effects at edges
+// GOOD
 let processOrder order =
     order
     |> calculateTotal
-    |> applyDiscount
-    |> Result.tee (fun total -> Log.Information("Total: {Total}", total))
+    |> Result.tee (fun total -> Log.Information($"Total: {total}"))
+```
+
+### ❌ Duplicating Type Definitions
+```fsharp
+// BAD - Types in both Program.fs and Tests
+type CliArguments = ...  // Program.fs
+type CliArguments = ...  // Tests (duplicate!)
+
+// GOOD - Shared module
+// CliArguments.fs
+type CliArguments = ...
+
+// Program.fs
+open CliArguments
+
+// Tests.fs
+open CliArguments
 ```
 
 ### ❌ Overly Complex Pipelines
@@ -345,16 +412,13 @@ data
 |> List.map summarizeByCategory
 ```
 
-## .NET 10 / F# 10 Specific Features
+## .NET 10 / F# 10 Features
 
-### Use When Appropriate
+### Use Appropriately
+- **String interpolation** - `$"Value: {x}"` instead of `sprintf`
 - **Collection expressions** - Unified syntax for lists, arrays, sequences
-- **Discriminated union improvements** - Better pattern matching
 - **Enhanced type inference** - Less verbose code
 - **Performance improvements** - Faster compilation and runtime
-
-### Migration Notes
-- Test all Result/Option operations for behavioral changes
 
 ## Resources
 
@@ -367,18 +431,15 @@ data
 - [FsToolkit.ErrorHandling](https://demystifyfp.gitbook.io/fstoolkit-errorhandling/)
 - [Argu](https://fsprojects.github.io/Argu/)
 - [Unquote](https://github.com/SwensenSoftware/unquote)
-
-
----
+- [FsCheck](https://fscheck.github.io/FsCheck/)
 
 ## Key Principles Summary
 
-1. **Readability over cleverness** - Code is read more than written
+1. **Separation of concerns** - Domain vs Infrastructure layers
 2. **Pure core, impure shell** - Isolate side effects
 3. **Railway-oriented programming** - Explicit error handling
 4. **Type-driven design** - Make invalid states impossible
-5. **Test the domain** - Pure functions are inherently testable
-6. **Small, composable functions** - Unix philosophy
-7. **Explicit over implicit** - Clear intent in code
-
----
+5. **DRY principle** - Share types, avoid duplication
+6. **Testability** - Pure functions, property-based tests
+7. **Readability** - Explicit piping, clear intent
+8. **Small, composable functions** - Unix philosophy
