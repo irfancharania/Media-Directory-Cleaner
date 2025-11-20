@@ -90,17 +90,10 @@ type DomainError =
 // ============================================================================
 
 module ValidatedPath =
-    /// Create a validated path, ensuring it exists and is a directory
-    let create (path: string) : Result<ValidatedPath, ValidationError> =
-        if String.IsNullOrWhiteSpace(path) then
-            Error PathEmpty
-        elif not (Directory.Exists(path)) then
-            if File.Exists(path) then
-                Error (PathNotDirectory path)
-            else
-                Error (PathNotFound path)
-        else
-            Ok (ValidatedPath path)
+    /// Create a validated path from a string that's already been checked
+    /// This is internal - use PathValidation.validate from infrastructure layer
+    let internal createUnchecked (path: string) : ValidatedPath =
+        ValidatedPath path
     
     /// Get the underlying string value
     let value (ValidatedPath path) = path

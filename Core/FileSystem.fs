@@ -4,6 +4,8 @@ open System
 open System.IO
 open Domain
 open Size
+open PathValidation
+
 
 [<Literal>]
 let logFileName = "cleanLog.log"
@@ -62,7 +64,7 @@ let getDirectorySizeMB (path: string) : int64<MB> =
 
 /// Check if a directory is a leaf node (has no subdirectories)
 let isLeafNode (path: string) : bool =
-    match ValidatedPath.create path with
+    match PathValidation.validate path with
     | Error _ -> false
     | Ok validPath ->
         match getTopSubdirectories validPath with

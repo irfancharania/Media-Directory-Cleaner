@@ -2,27 +2,7 @@
 open System.IO
 open Argu
 open Domain
-
-// ============================================================================
-// CLI Argument Definitions using Argu SubCommands
-// ============================================================================
-
-type CleanMode =
-    | Tv
-    | Movies
-    | Music
-
-type CliArguments =
-    | [<MainCommand; ExactlyOnce>] Mode of CleanMode
-    | [<AltCommandLine("-p") ; Unique ; Mandatory>] Path of string
-    | [<Unique>] Execute
-    
-    interface IArgParserTemplate with
-        member this.Usage =
-            match this with
-            | Mode _ -> "cleaning mode: tv, movies, or music"
-            | Path _ -> "specify the directory path to clean"
-            | Execute -> "execute mode - actually delete items (default is preview only)"
+open CliArguments
 
 // ============================================================================
 // Console Color Helpers
@@ -80,11 +60,11 @@ let runClean (cleanFn: string -> PreviewMode -> Result<seq<DeletableItem>, Domai
 [<EntryPoint>]
 let main argv =
     let errorHandler = ProcessExiter(colorizer = function ErrorCode.HelpText -> None | _ -> Some ConsoleColor.Red)
-    let parser = ArgumentParser.Create<CliArguments>(programName = "DirectoryCleaner.exe", errorHandler = errorHandler)
+    let parser = createParser errorHandler
     
     let assembly = Reflection.Assembly.GetExecutingAssembly()
     let version = assembly.GetName().Version
-    let versionString = version.ToString(3)
+    let versionString = version.ToString()
     
     // If no arguments, show usage with version and exit
     if argv.Length = 0 then
@@ -95,21 +75,22 @@ let main argv =
     else
         try
             let results = parser.ParseCommandLine(inputs = argv, raiseOnUsage = true)
-            let mode = results.GetResult(Mode)
-            let path = results.GetResult(Path)
+            let mode = results.GetResult(CliArguments.Mode)
+            let path = results.GetResult(CliArguments.Path)
 
             // Select cleaning function based on mode
             let cleanFn = 
                 match mode with
-                | Tv -> TVShows.clean
-                | Movies -> Movies.clean
-                | Music -> Music.clean
+                | CleanMode.Tv -> TVShows.clean
+                | CleanMode.Movies -> Movies.clean
+                | CleanMode.Music -> Music.clean
 
             let previewMode = 
-                if results.Contains(Execute) then 
+                if results.Contains(CliArguments.Execute) then 
                     Domain.Execute 
                 else 
                     Domain.Preview
+                    
             runClean cleanFn path previewMode
         with
         | :? ArguParseException as ex ->

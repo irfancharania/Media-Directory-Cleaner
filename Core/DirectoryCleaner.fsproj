@@ -20,11 +20,13 @@
 		<Compile Include="Utility.fs" />
 		<Compile Include="Domain.fs" />
 		<Compile Include="Logging.fs" />
+		<Compile Include="PathValidation.fs" />
 		<Compile Include="FileSystem.fs" />
 		<Compile Include="LastRun.fs" />
 		<Compile Include="Movies.fs" />
 		<Compile Include="TVShows.fs" />
 		<Compile Include="Music.fs" />
+		<Compile Include="CliArguments.fs" />
 		<Compile Include="Program.fs" />
 	</ItemGroup>
 

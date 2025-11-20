@@ -110,7 +110,7 @@ let clean (path: string) (previewMode: PreviewMode)
     
     // Get all leaf directories
     let allDirsResult =
-        ValidatedPath.create path
+        PathValidation.validate path
         |> Result.liftValidationError
         |> Result.bind (getAllSubdirectories >> Result.liftDirectoryError)
         |> Result.bind (filterToLeafNodes >> Result.liftDirectoryError)
