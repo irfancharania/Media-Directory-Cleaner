@@ -8,32 +8,10 @@ Using [supplemental tools](http://kodi.wiki/view/Library_managers) like [Media C
 
 Unfortunately, when media is deleted from within the Kodi/XBMC interface, the local meta files are left behind on the file system. Hence, the need for this tool.
 
-## Features
-
-- **Safe by default** - Preview mode is default, requires explicit `--execute` flag
-- **Smart cleaning** - Identifies orphaned metadata files and directories
-- **Subtitle cleaning** - Automatically removes non-English/French subtitle files (movies only)
-
-## Arguments
-
-### Required
-
-| Argument | Short | Description |
-|----------|-------|-------------|
-| `--mode` | `-m` | Cleaning mode: `tv`, `movies`, or `music` |
-| `--path` | `-p` | Directory path to clean |
-
-### Optional
-
-| Argument | Short | Description |
-|----------|-------|-------------|
-| `--execute` | | Execute mode - actually delete items (default is preview only) |
-| `--help` | | Display help information |
-
 ## Usage
 
 ```
-DirectoryCleaner.exe --mode <mode> --path "<path>" [--execute]
+DirectoryCleaner.exe <mode> --path "<path>" [--execute]
 ```
 
 ### Important
@@ -46,16 +24,13 @@ To actually delete files, you must add the `--execute` flag.
 
 ```
 # Preview what would be cleaned
-DirectoryCleaner.exe --mode movies --path "C:\Movies"
+> DirectoryCleaner.exe movies --path "Z:\Movies"
 
 # Preview with short flags
-DirectoryCleaner.exe -m tv -p "C:\TV Shows"
+> DirectoryCleaner.exe movies -p "Z:\Movies"
 
-# Actually execute the cleaning (requires --execute flag)
-DirectoryCleaner.exe --mode movies --path "C:\Movies" --execute
-
-# Preview music cleaning
-DirectoryCleaner.exe -m music -p "C:\Music"
+# Actually execute the cleaning
+> DirectoryCleaner.exe movies -p "Z:\Movies" --execute
 ```
 
 ### Scheduled Task
@@ -63,10 +38,34 @@ DirectoryCleaner.exe -m music -p "C:\Music"
 For automated daily cleaning, create a scheduled task:
 
 ```
-DirectoryCleaner.exe --mode movies --path "C:\Movies" --execute
+DirectoryCleaner.exe movies --path "Z:\Movies" --execute
 ```
 
 > **Tip:** Run in preview mode first to verify what will be deleted!
+
+
+
+## Arguments
+
+### Mode:
+There are 3 available modes:
+* `tv`
+* `movies`
+* `music`
+
+### Required
+
+| Argument | Short | Description |
+|----------|-------|-------------|
+| `--path` | `-p` | Directory path to clean |
+
+### Optional
+
+| Argument | Short | Description |
+|----------|-------|-------------|
+| `--execute` | | Execute mode - actually delete items (default is preview only) |
+| `--help` | | Display help information |
+
 
 ## Modes
 
