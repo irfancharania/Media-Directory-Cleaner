@@ -8,15 +8,19 @@
 	</PropertyGroup>
 
 	<ItemGroup>
+		<Compile Include="TestHelpers.fs" />
 		<Compile Include="DomainTests.fs" />
 		<Compile Include="SubtitleTests.fs" />
-		<Compile Include="FileSystemSetup.fs" />
+		<Compile Include="SubtitlePropertyTests.fs" />
+		<Compile Include="ArguTests.fs" />
 		<Compile Include="MovieTests.fs" />
 		<Compile Include="TVShowTests.fs" />
 		<Compile Include="MusicTests.fs" />
 	</ItemGroup>
 
 	<ItemGroup>
+		<PackageReference Include="FsCheck.Xunit" Version="3.3.2" />
+		<PackageReference Include="Unquote" Version="7.0.1" />
 		<PackageReference Include="xunit" Version="2.9.3" />
 		<PackageReference Include="xunit.runner.visualstudio" Version="3.1.5">
 			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>

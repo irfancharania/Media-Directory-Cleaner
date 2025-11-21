@@ -4,11 +4,27 @@ open System
 open System.IO
 open Domain
 open Size
-open PathValidation
 
 
 [<Literal>]
 let logFileName = "cleanLog.log"
+
+// ============================================================================
+// Path Validation - Infrastructure Layer (I/O Operations)
+// ============================================================================
+
+/// Validate a path string by checking the file system
+/// This is where I/O happens - in the infrastructure layer
+let validatePath (path: string) : Result<ValidatedPath, ValidationError> =
+    if String.IsNullOrWhiteSpace(path) then
+        Error PathEmpty
+    elif not (Directory.Exists(path)) then
+        if File.Exists(path) then
+            Error (PathNotDirectory path)
+        else
+            Error (PathNotFound path)
+    else
+        Ok (ValidatedPath.createUnchecked path)
 
 // ============================================================================
 // Directory Filtering
@@ -64,7 +80,7 @@ let getDirectorySizeMB (path: string) : int64<MB> =
 
 /// Check if a directory is a leaf node (has no subdirectories)
 let isLeafNode (path: string) : bool =
-    match PathValidation.validate path with
+    match validatePath path with
     | Error _ -> false
     | Ok validPath ->
         match getTopSubdirectories validPath with

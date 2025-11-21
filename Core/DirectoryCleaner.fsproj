@@ -15,12 +15,18 @@
 		<RepositoryType>git</RepositoryType>
 	</PropertyGroup>
 
+	<!-- Expose internals to test project -->
+	<ItemGroup>
+		<AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+			<_Parameter1>Tests</_Parameter1>
+		</AssemblyAttribute>
+	</ItemGroup>
+	
 	<ItemGroup>
 		<Compile Include="Size.fs" />
 		<Compile Include="Utility.fs" />
 		<Compile Include="Domain.fs" />
 		<Compile Include="Logging.fs" />
-		<Compile Include="PathValidation.fs" />
 		<Compile Include="FileSystem.fs" />
 		<Compile Include="LastRun.fs" />
 		<Compile Include="Movies.fs" />

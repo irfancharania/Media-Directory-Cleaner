@@ -2,170 +2,277 @@ namespace MediaDirectoryCleaner.Tests
 
 open System.IO
 open Xunit
-open FsUnit.Xunit
+open Swensen.Unquote
 open Domain
-open FileSystemSetup
+open TestHelpers
 
 module MovieTests = 
 
     // ============================================================================
-    // Movie Tests
+    // Movie Without Video Tests
     // ============================================================================
 
     [<Fact>]
     let ``Movie without video file - entire folder should be deleted``() =
-        let testDir = createTestStructure [
-            ("Classic Sports Movie (1996)/fanart.jpg", Some 290368L)
-            ("Classic Sports Movie (1996)/poster.jpg", Some 181504L)
-            ("Classic Sports Movie (1996)/Movie.1996.1080p.eng.srt", Some 77384L)
-            ("Classic Sports Movie (1996)/Movie.1996.1080p.srt", Some 77515L)
-            ("Classic Sports Movie (1996)/Movie.1996.1080p.nfo", Some 33902L)
-            ("Classic Sports Movie (1996)/.actors/Lead_Actor.jpg", Some 135064L)
-            ("Classic Sports Movie (1996)/.actors/Supporting_Actor.jpg", Some 124810L)
-            ("Classic Sports Movie (1996)/extrafanart/fanart0.jpg", Some 122924L)
-            ("Classic Sports Movie (1996)/extrafanart/fanart1.jpg", Some 194663L)
-        ]
-    
-        try
-            // Run cleaning in preview mode
+        withTestDir (movieWithoutVideo "Classic Movie (1996)") (fun testDir ->
             let result = Movies.clean testDir Domain.Preview
         
-            // Should identify the entire movie folder for deletion (< 100 MB, no video)
             match result with
             | Ok items ->
-                let movieFolder = Path.Combine(testDir, "Classic Sports Movie (1996)")
-                items |> should contain movieFolder
+                let movieFolder = Path.Combine(testDir, "Classic Movie (1996)")
+                test <@ containsDirectory movieFolder items @>
+                
+                // Should be marked as Directory, not File
+                test <@ not (containsFile movieFolder items) @>
             | Error _ ->
                 failwith "Should have found folder to delete"
-        finally
-            cleanupTestDir testDir
+        )
 
     [<Fact>]
-    let ``Movie with video file - keep folder but delete non-English/French subtitles``() =
-        let testDir = createTestStructure [
-            // Main video file (1.87 GB)
-            ("Adventure Movie (2024)/Adventure.Movie.2024.1080p.mp4", Some 1871531057L)
-            ("Adventure Movie (2024)/Adventure.Movie.2024.1080p.nfo", Some 15025L)
-            // English subtitles - should keep
-            ("Adventure Movie (2024)/English.srt", Some 129119L)
-            ("Adventure Movie (2024)/SDH.eng.HI.srt", Some 153335L)
-            // French subtitles - should keep
-            ("Adventure Movie (2024)/fre.srt", Some 93784L)
-            ("Adventure Movie (2024)/SDH.fre.srt", Some 89000L)
-            // Non-English/French subtitles - should delete
-            ("Adventure Movie (2024)/ara.srt", Some 132965L)
-            ("Adventure Movie (2024)/spa.srt", Some 97349L)
-            ("Adventure Movie (2024)/ger.srt", Some 97813L)
-            ("Adventure Movie (2024)/por.srt", Some 95000L)
-            // Metadata - should keep
-            ("Adventure Movie (2024)/poster.jpg", Some 286220L)
-            ("Adventure Movie (2024)/fanart.jpg", Some 244720L)
-            ("Adventure Movie (2024)/.actors/Actor_One.jpg", Some 25840L)
-            ("Adventure Movie (2024)/extrafanart/fanart0.jpg", Some 343521L)
+    let ``Small movie folder under 100MB threshold is deleted``() =
+        let structure = [
+            ("Tiny Movie/poster.jpg", Some 50000000L)  // 50 MB
+            ("Tiny Movie/fanart.jpg", Some 30000000L)  // 30 MB  
+            // Total: 80 MB, no video
         ]
-    
-        try
+        
+        withTestDir structure (fun testDir ->
+            let result = Movies.clean testDir Domain.Preview
+            
+            match result with
+            | Ok items ->
+                let movieFolder = Path.Combine(testDir, "Tiny Movie")
+                test <@ containsDirectory movieFolder items @>
+            | Error _ ->
+                failwith "Should delete folder under threshold"
+        )
+
+    [<Fact>]
+    let ``Extrafanart folder is not evaluated separately``() =
+        let structure = [
+            ("Movie/movie.mp4", Some 50000000L) // 500 MB
+            ("Movie/extrafanart/fanart1.jpg", Some 343521L)
+            ("Movie/extrafanart/fanart2.jpg", Some 450000L)
+        ]
+        
+        withTestDir structure (fun testDir ->
+            let result = Movies.clean testDir Domain.Preview
+            
+            match result with
+            | Ok items ->
+                // extrafanart should not appear in results
+                test <@ not (containsPathSubstring "extrafanart" items) @>
+            | Error (CleaningError (NothingToClean _)) ->
+                () // Expected
+            | Error e ->
+                failwithf $"Unexpected error: {e}"
+        )
+
+    // ============================================================================
+    // Subtitle Cleaning Tests
+    // ============================================================================
+
+    [<Fact>]
+    let ``Movie with video - keeps folder but deletes non-English-French subtitles``() =
+        withTestDir (movieWithVideoAndSubtitles "Adventure (2024)" "Adventure.2024.1080p") (fun testDir ->
             let result = Movies.clean testDir Domain.Preview
         
             match result with
             | Ok items ->
-                let itemList = items |> Seq.toList
-                // Should NOT delete the folder
-                let movieFolder = Path.Combine(testDir, "Adventure Movie (2024)")
-                itemList |> should not' (contain movieFolder)
+                let movieFolder = Path.Combine(testDir, "Adventure (2024)")
+                
+                // Folder should NOT be deleted (has video)
+                test <@ not (containsDirectory movieFolder items) @>
             
-                // Should delete non-English/French subtitles
-                itemList |> should contain (Path.Combine(testDir, "Adventure Movie (2024)", "ara.srt"))
-                itemList |> should contain (Path.Combine(testDir, "Adventure Movie (2024)", "spa.srt"))
-                itemList |> should contain (Path.Combine(testDir, "Adventure Movie (2024)", "ger.srt"))
-                itemList |> should contain (Path.Combine(testDir, "Adventure Movie (2024)", "por.srt"))
+                // Should delete non-English/French subtitles (as Files)
+                let araSub = Path.Combine(testDir, "Adventure (2024)", "ara.srt")
+                let spaSub = Path.Combine(testDir, "Adventure (2024)", "spa.srt")
+                let gerSub = Path.Combine(testDir, "Adventure (2024)", "ger.srt")
+                let porSub = Path.Combine(testDir, "Adventure (2024)", "por.srt")
+                
+                test <@ containsFile araSub items @>
+                test <@ containsFile spaSub items @>
+                test <@ containsFile gerSub items @>
+                test <@ containsFile porSub items @>
             
                 // Should NOT delete English subtitles
-                itemList |> List.exists (fun x -> x.Contains("English.srt")) |> should be False
-                itemList |> List.exists (fun x -> x.Contains("SDH.eng.HI.srt")) |> should be False
+                test <@ not (containsPathSubstring "English.srt" items) @>
+                test <@ not (containsPathSubstring "SDH.eng.HI.srt" items) @>
             
                 // Should NOT delete French subtitles
-                itemList |> List.exists (fun x -> x.Contains("fre.srt")) |> should be False
-                itemList |> List.exists (fun x -> x.Contains("SDH.fre.srt")) |> should be False
-            | Error _ ->
-                () // No items to clean is OK
-        finally
-            cleanupTestDir testDir
-
-    [<Fact>]
-    let ``Movie folder with extrafanart should not have extrafanart evaluated separately``() =
-        let testDir = createTestStructure [
-            ("Blockbuster (2023)/Blockbuster.2023.1080p.mp4", Some 1000000000L) // 1 GB
-            ("Blockbuster (2023)/poster.jpg", Some 286220L)
-            ("Blockbuster (2023)/extrafanart/fanart1.jpg", Some 343521L)
-            ("Blockbuster (2023)/extrafanart/fanart2.jpg", Some 450000L)
-            ("Blockbuster (2023)/extrafanart/fanart3.jpg", Some 520000L)
-        ]
-        
-        try
-            let result = Movies.clean testDir Domain.Preview
-            
-            // extrafanart should not be listed as a separate directory to clean
-            match result with
-            | Ok items ->
-                let itemList = items |> Seq.toList
-                itemList |> List.exists (fun x -> x.Contains("extrafanart")) |> should be False
+                test <@ not (containsPathSubstring "fre.srt" items) @>
+                test <@ not (containsPathSubstring "SDH.fre.srt" items) @>
+                
+                // Verify item types
+                let files, dirs = countItems items
+                test <@ files = 4 @>  // Only subtitle files
+                test <@ dirs = 0 @>   // No directories
             | Error (CleaningError (NothingToClean _)) ->
-                () // Expected - nothing to clean
+                failwith "Should have found subtitles to delete"
             | Error e ->
-                failwithf "Unexpected error: %A" e
-        finally
-            cleanupTestDir testDir
+                failwithf $"Unexpected error: {e}"
+        )
 
     [<Fact>]
-    let ``Subtitle matching video filename should be kept even if name contains language codes``() =
-        let testDir = createTestStructure [
-            // Video file with "spa" in the title (Spanish word)
-            ("Destination (2024)/The.Spanish.Prisoner.1997.1080p.mp4", Some 1000000000L) // 1 GB
-            // Subtitle matching the video filename exactly - should KEEP
-            ("Destination (2024)/The.Spanish.Prisoner.1997.1080p.srt", Some 50000L)
-            // Other language subtitles - should DELETE
-            ("Destination (2024)/ara.srt", Some 45000L)
-            ("Destination (2024)/ger.srt", Some 48000L)
+    let ``Subtitle matching video filename is kept even with language codes in name``() =
+        let structure = [
+            // Video with "spanish" in title (Spanish word)
+            ("Movie/The.Spanish.Prisoner.1997.1080p.mp4", Some 50000000L)
+            // Matching subtitle - should KEEP
+            ("Movie/The.Spanish.Prisoner.1997.1080p.srt", Some 50000L)
+            // Non-matching language subs - should DELETE
+            ("Movie/ara.srt", Some 45000L)
+            ("Movie/ger.srt", Some 48000L)
         ]
         
-        try
+        withTestDir structure (fun testDir ->
             let result = Movies.clean testDir Domain.Preview
             
             match result with
             | Ok items ->
-                let itemList = items |> Seq.toList
-                // Should NOT delete the matching subtitle (even though "spa" is in the name)
-                itemList |> List.exists (fun x -> x.Contains("The.Spanish.Prisoner.1997.1080p.srt")) |> should be False
-                // Should delete non-matching language subtitles
-                itemList |> should contain (Path.Combine(testDir, "Destination (2024)", "ara.srt"))
-                itemList |> should contain (Path.Combine(testDir, "Destination (2024)", "ger.srt"))
+                // Matching subtitle NOT deleted
+                test <@ not (containsPathSubstring "The.Spanish.Prisoner.1997.1080p.srt" items) @>
+                
+                // Non-matching subs deleted
+                let araSub = Path.Combine(testDir, "Movie", "ara.srt")
+                let gerSub = Path.Combine(testDir, "Movie", "ger.srt")
+                test <@ containsFile araSub items @>
+                test <@ containsFile gerSub items @>
             | Error _ ->
                 failwith "Should have found language subtitles to delete"
-        finally
-            cleanupTestDir testDir
+        )
 
     [<Fact>]
-    let ``Subtitle matching video in subdirectory should be kept``() =
-        let testDir = createTestStructure [
-            ("Adventure (2020)/Adventure.Movie.2020.1080p.mp4", Some 1000000000L)
-            // Subtitle in subdirectory matching video name
-            ("Adventure (2020)/Subs/Adventure.Movie.2020.1080p.srt", Some 50000L)
-            // Other subtitle that doesn't match
-            ("Adventure (2020)/Subs/spa.srt", Some 45000L)
+    let ``Subtitle in subdirectory matching video name is kept``() =
+        let structure = [
+            ("Movie/Movie.2020.1080p.mp4", Some 1000000000L)
+            // Matching subtitle in Subs folder
+            ("Movie/Subs/Movie.2020.1080p.srt", Some 50000L)
+            // Non-matching subtitle
+            ("Movie/Subs/spa.srt", Some 45000L)
         ]
         
-        try
+        withTestDir structure (fun testDir ->
             let result = Movies.clean testDir Domain.Preview
             
             match result with
             | Ok items ->
-                let itemList = items |> Seq.toList
-                // Matching subtitle should NOT be deleted (even in subdirectory)
-                itemList |> List.exists (fun x -> x.Contains("Adventure.Movie.2020.1080p.srt")) |> should be False
-                // Non-matching subtitle should be deleted
-                itemList |> should contain (Path.Combine(testDir, "Adventure (2020)", "Subs", "spa.srt"))
+                // Matching subtitle NOT deleted (even in subdirectory)
+                test <@ not (containsPathSubstring "Movie.2020.1080p.srt" items) @>
+                
+                // Non-matching subtitle deleted
+                let spaSub = Path.Combine(testDir, "Movie", "Subs", "spa.srt")
+                test <@ containsFile spaSub items @>
             | Error _ ->
                 failwith "Should have found language subtitle to delete"
-        finally
-            cleanupTestDir testDir
+        )
+
+    // ============================================================================
+    // Mixed Scenarios
+    // ============================================================================
+
+    [<Fact>]
+    let ``Multiple small folders and unwanted subtitles in large folders``() =
+        let structure = [
+            // Small folder - should delete
+            ("Small Movie/poster.jpg", Some 50000L)
+            // Large folder with video and subtitles
+            ("Big Movie/movie.mp4", Some 1000000000L) // 1 GB
+            ("Big Movie/eng.srt", Some 50000L)  // Keep
+            ("Big Movie/spa.srt", Some 48000L)  // Delete
+            ("Big Movie/ger.srt", Some 47000L)  // Delete
+        ]
+        
+        withTestDir structure (fun testDir ->
+            let result = Movies.clean testDir Domain.Preview
+            
+            match result with
+            | Ok items ->
+                // Small folder deleted as Directory
+                let smallFolder = Path.Combine(testDir, "Small Movie")
+                test <@ containsDirectory smallFolder items @>
+                
+                // Large folder NOT deleted
+                let bigFolder = Path.Combine(testDir, "Big Movie")
+                test <@ not (containsDirectory bigFolder items) @>
+                
+                // Subtitle files deleted
+                let spaSub = Path.Combine(testDir, "Big Movie", "spa.srt")
+                let gerSub = Path.Combine(testDir, "Big Movie", "ger.srt")
+                test <@ containsFile spaSub items @>
+                test <@ containsFile gerSub items @>
+                
+                // English subtitle NOT deleted
+                test <@ not (containsPathSubstring "eng.srt" items) @>
+                
+                let files, dirs = countItems items
+                test <@ files = 2 @>  // 2 subtitle files
+                test <@ dirs = 1 @>   // 1 small directory
+            | Error _ ->
+                failwith "Should have found items to delete"
+        )
+
+    // ============================================================================
+    // Execute Mode Tests
+    // ============================================================================
+
+    [<Fact>]
+    let ``Execute mode actually deletes items``() =
+        let structure = [
+            ("DeleteMe/poster.jpg", Some 50000L)
+            ("DeleteMe/fanart.jpg", Some 60000L)
+        ]
+        
+        withTestDir structure (fun testDir ->
+            let movieFolder = Path.Combine(testDir, "DeleteMe")
+            
+            // Verify folder exists before
+            test <@ Directory.Exists(movieFolder) @>
+            
+            let result = Movies.clean testDir Domain.Execute
+            
+            match result with
+            | Ok items ->
+                test <@ containsDirectory movieFolder items @>
+                
+                // Verify folder was actually deleted
+                test <@ not (Directory.Exists(movieFolder)) @>
+            | Error e ->
+                failwithf $"Unexpected error: {e}"
+        )
+
+    // ============================================================================
+    // Error Cases
+    // ============================================================================
+
+    [<Fact>]
+    let ``No items to clean returns appropriate error``() =
+        let structure = [
+            ("Good Movie/movie.mp4", Some 1000000000L) // 1 GB
+            ("Good Movie/eng.srt", Some 50000L)
+            ("Good Movie/fre.srt", Some 48000L)
+        ]
+        
+        withTestDir structure (fun testDir ->
+            let result = Movies.clean testDir Domain.Preview
+            
+            match result with
+            | Ok _ ->
+                failwith "Should return error when nothing to clean"
+            | Error (CleaningError (NothingToClean _)) ->
+                () // Expected
+            | Error e ->
+                failwithf $"Unexpected error type: {e}"
+        )
+
+    [<Fact>]
+    let ``Invalid path returns validation error``() =
+        let result = Movies.clean "V:\\NonExistent\\Path\\12345" Domain.Preview
+        
+        match result with
+        | Error (ValidationError (PathNotFound _)) ->
+            () // Expected
+        | Error e ->
+            failwithf $"Unexpected error type: {e}"
+        | Ok _ ->
+            failwith "Should return error for invalid path"

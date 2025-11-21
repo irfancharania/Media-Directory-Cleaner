@@ -60,7 +60,7 @@ let runClean (cleanFn: string -> PreviewMode -> Result<seq<DeletableItem>, Domai
 [<EntryPoint>]
 let main argv =
     let errorHandler = ProcessExiter(colorizer = function ErrorCode.HelpText -> None | _ -> Some ConsoleColor.Red)
-    let parser = createParser errorHandler
+    let parser = createParser (Some errorHandler)
     
     let assembly = Reflection.Assembly.GetExecutingAssembly()
     let version = assembly.GetName().Version

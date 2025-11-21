@@ -24,5 +24,10 @@ type CliArguments =
             | Execute -> "execute mode - actually delete items (default is preview only)"
 
 /// Create the argument parser
-let createParser errorHandler =
-    ArgumentParser.Create<CliArguments>(programName = "DirectoryCleaner.exe", errorHandler = errorHandler)
+let createParser (errorHandler:IExiter option) =
+    let name = "DirectoryCleaner.exe"
+    match errorHandler with
+    | Some handler -> 
+        ArgumentParser.Create<CliArguments>(programName = name, errorHandler = handler)
+    | None -> 
+        ArgumentParser.Create<CliArguments>(programName = name)

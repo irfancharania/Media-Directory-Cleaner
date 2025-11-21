@@ -129,7 +129,7 @@ let clean (path: string) (previewMode: PreviewMode)
     let logFilePath = Path.Combine(path, logFileName)
     let isExecute = (previewMode = Execute)
     
-    PathValidation.validate path 
+    FileSystem.validatePath path 
     |> Result.liftValidationError
     |> Result.bind (getAllSubdirectories >> Result.liftDirectoryError)
     |> Result.bind (filterToLeafNodes >> Result.liftDirectoryError)
