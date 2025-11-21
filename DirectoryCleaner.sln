@@ -6,6 +6,8 @@ MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{43DE0635-7281-443C-92A7-D67C68F4E7A2}"
 	ProjectSection(SolutionItems) = preProject
 		readme.md = readme.md
+		AI Development Guide.md = AI Development Guide.md
+		todo.md = todo.md
 	EndProjectSection
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "DirectoryCleaner", "Core\DirectoryCleaner.fsproj", "{0D31AA37-BBF2-4D19-9743-E43B9CC25AB4}"

@@ -5,26 +5,27 @@ open System.IO
 open Domain
 open Size
 
-
 [<Literal>]
 let logFileName = "cleanLog.log"
 
 // ============================================================================
-// Path Validation - Infrastructure Layer (I/O Operations)
+// Path Validation - Infrastructure Layer (I/O)
 // ============================================================================
 
 /// Validate a path string by checking the file system
-/// This is where I/O happens - in the infrastructure layer
 let validatePath (path: string) : Result<ValidatedPath, ValidationError> =
     if String.IsNullOrWhiteSpace(path) then
         Error PathEmpty
-    elif not (Directory.Exists(path)) then
-        if File.Exists(path) then
-            Error (PathNotDirectory path)
-        else
-            Error (PathNotFound path)
     else
-        Ok (ValidatedPath.createUnchecked path)
+        let normalizedPath = Path.GetFullPath(path)
+        
+        if not (Directory.Exists(normalizedPath)) then
+            if File.Exists(normalizedPath) then
+                Error (PathNotDirectory path)
+            else
+                Error (PathNotFound path)
+        else
+            Ok (ValidatedPath.createUnchecked normalizedPath)
 
 // ============================================================================
 // Directory Filtering
