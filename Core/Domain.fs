@@ -90,8 +90,7 @@ type DomainError =
 // ============================================================================
 
 module ValidatedPath =
-    /// Create a validated path from a string that's already been checked
-    /// This is internal - use PathValidation.validate from infrastructure layer
+    /// Internal constructor - only for use by infrastructure layer
     let internal createUnchecked (path: string) : ValidatedPath =
         ValidatedPath path
     

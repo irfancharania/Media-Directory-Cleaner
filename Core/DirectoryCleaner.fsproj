@@ -25,6 +25,7 @@
 	<ItemGroup>
 		<Compile Include="Size.fs" />
 		<Compile Include="Utility.fs" />
+		<Compile Include="Progress.fs" />
 		<Compile Include="Domain.fs" />
 		<Compile Include="Logging.fs" />
 		<Compile Include="FileSystem.fs" />
