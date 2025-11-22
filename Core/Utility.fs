@@ -17,13 +17,3 @@ module Seq =
                     else yield None, Some(item)
             }
         pairs |> Seq.choose fst, pairs |> Seq.choose snd
-
-// ============================================================================
-// Date/Time Types
-// ============================================================================
-
-type LocalDateTime = 
-    | LocalDateTime of System.DateTime
-
-let formatLocalDateTime formatString (LocalDateTime dt) = 
-    dt.ToString(format = formatString)

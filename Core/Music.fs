@@ -8,50 +8,71 @@ open Size
 
 let ThresholdSizeKB = 500L<kB>
 
-/// Check if directory has any main audio files
-let private hasAudioFiles (path: string) : bool =
-    let files = getFiles path
-    files
-    |> Seq.exists (fun file ->
+// ============================================================================
+// Directory Classification (Pure)
+// ============================================================================
+
+/// Check if a list of files contains any audio files - pure function
+let private containsAudioFiles (files: ExistingFile list) : bool =
+    files |> List.exists (fun file ->
         match file with
         | AudioFile ThresholdSizeKB _ -> true
         | _ -> false)
 
-/// Filter directories that have no audio files
-let private filterDirectoriesWithoutAudio (directories: seq<string>) 
-    : Result<seq<DeletableItem>, CleaningError> =
+/// Filter to directories without audio files - pure function
+let private findDirectoriesWithoutAudio (dirsWithFiles: (string * ExistingFile list) list) 
+    : DeletableItem list =
+    dirsWithFiles
+    |> List.filter (fun (_, files) -> not (containsAudioFiles files))
+    |> List.map (fun (dir, _) -> DeletableItem.fromDirectory dir)
+    |> List.sortBy DeletableItem.path
+
+// ============================================================================
+// File Gathering (Infrastructure)
+// ============================================================================
+
+/// Gather files for each directory
+let private gatherFilesForDirectory (dir: string) : string * ExistingFile list =
+    (dir, getFiles dir |> Seq.toList)
+
+// ============================================================================
+// Pipeline Helpers
+// ============================================================================
+
+/// Execute deletion of directories, returning the items on success
+let private executeDelete (logFilePath: string) (items: DeletableItem list) : Result<DeletableItem list, DomainError> =
+    Logging.logListToFile logFilePath (items |> Seq.map DeletableItem.path)
     
-    let orphanedDirs =
-        directories
-        |> Seq.filter (hasAudioFiles >> not)
-        |> Seq.map DeletableItem.fromDirectory
-        |> Seq.toList
-        |> List.sortBy DeletableItem.path  // Sort alphabetically for consistent ordering
+    let dirs = items |> List.map DeletableItem.path
     
-    if List.isEmpty orphanedDirs then
-        Error (NothingToClean "No directories without audio files")
-    else
-        Ok orphanedDirs
+    deleteDirectories dirs
+    |> Result.liftCleaningError
+    |> Result.map (fun () -> items)
+
+// ============================================================================
+// Main Clean Function
+// ============================================================================
 
 /// Clean music directories
-let clean (path: string) (previewMode: PreviewMode) 
-    : Result<seq<DeletableItem>, DomainError> =
+let clean (path: string) (previewMode: PreviewMode) : Result<seq<DeletableItem>, DomainError> =
     
     let logFilePath = Path.Combine(path, logFileName)
     let isExecute = (previewMode = Execute)
     
-    FileSystem.validatePath path 
-    |> Result.liftValidationError
-    |> Result.bind (getAllSubdirectories >> Result.liftDirectoryError)
-    |> Result.bind (filterToLeafNodes >> Result.liftDirectoryError)
-    |> Result.bind (filterDirectoriesWithoutAudio >> Result.liftCleaningError)
-    |> Result.teeIf isExecute (fun items -> 
-        Logging.logListToFile logFilePath (items |> Seq.map DeletableItem.path))
-    |> Result.bind (fun toDelete ->
-        if isExecute then
-            let dirs = toDelete |> Seq.map DeletableItem.path
-            deleteDirectories dirs 
-            |> Result.liftCleaningError
-            |> Result.map (fun () -> toDelete)
+    Progress.runResult "Validating path" (fun () ->
+        validatePath path |> Result.liftValidationError)
+    |> Result.bind (Progress.wrap "Scanning directories" (getAllSubdirectories >> Result.liftDirectoryError))
+    |> Result.bind (Progress.wrap "Finding leaf nodes" (filterToLeafNodes >> Result.liftDirectoryError))
+    |> Result.map (Progress.wrapMap "Scanning for audio files" (Seq.map gatherFilesForDirectory >> Seq.toList))
+    |> Result.map (Progress.wrapMap "Finding empty directories" findDirectoriesWithoutAudio)
+    |> Result.bind (fun items ->
+        if List.isEmpty items then
+            Error (CleaningError (NothingToClean "No directories without audio files"))
         else
-            Ok toDelete)
+            Ok items)
+    |> Result.bind (fun items ->
+        if isExecute then
+            Progress.wrap "Deleting directories" (executeDelete logFilePath) items
+        else
+            Ok items)
+    |> Result.map Seq.ofList

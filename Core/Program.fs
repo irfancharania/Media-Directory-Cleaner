@@ -1,11 +1,10 @@
 ﻿open System
-open System.IO
 open Argu
 open Domain
 open CliArguments
 
 // ============================================================================
-// Console Color Helpers
+// Console Output Helpers (stdout for results only)
 // ============================================================================
 
 let printColored color text =
@@ -19,9 +18,9 @@ let printColored color text =
 let printItem item =
     match item with
     | DeletableItem.Directory path ->
-        printColored ConsoleColor.Yellow $"  {path}"
+        printColored ConsoleColor.Yellow $"  [DIR]  {path}"
     | DeletableItem.File path ->
-        printColored ConsoleColor.White $"  {path}"
+        printColored ConsoleColor.White $"  [FILE] {path}"
 
 // ============================================================================
 // Application Logic
@@ -30,24 +29,34 @@ let printItem item =
 let runClean (cleanFn: string -> PreviewMode -> Result<seq<DeletableItem>, DomainError>) 
              (path: string)
              (previewMode: PreviewMode) =
+    
+    // Blank line after progress output
+    Progress.info ""
+    
     match cleanFn path previewMode with
     | Ok items ->
         if Seq.isEmpty items then
             printfn "No items to clean."
         else
             if previewMode = Domain.Preview then
-                printfn "PREVIEW MODE - The following files will be deleted when run with --execute"
+                printColored ConsoleColor.Cyan "PREVIEW MODE - The following items would be deleted with --execute"
                 printfn ""
-                printfn "Items found:"
             else
-                printfn "Items deleted:"
+                printColored ConsoleColor.Green "Items deleted:"
+                printfn ""
             
             items |> Seq.iter printItem
+            
+            // Summary
+            let dirs = items |> Seq.filter (function DeletableItem.Directory _ -> true | _ -> false) |> Seq.length
+            let files = items |> Seq.filter (function DeletableItem.File _ -> true | _ -> false) |> Seq.length
+            printfn ""
+            printfn $"Total: {dirs} directories, {files} files"
         0
     | Error error ->
         match Domain.DomainError.toOptionalMessage error with
         | Some msg -> 
-            eprintfn $"Error: {msg}"
+            Progress.error msg
             1
         | None -> 
             printfn "Nothing to clean."
@@ -78,7 +87,6 @@ let main argv =
             let mode = results.GetResult(CliArguments.Mode)
             let path = results.GetResult(CliArguments.Path)
 
-            // Select cleaning function based on mode
             let cleanFn = 
                 match mode with
                 | CleanMode.Tv -> TVShows.clean
@@ -94,10 +102,10 @@ let main argv =
             runClean cleanFn path previewMode
         with
         | :? ArguParseException as ex ->
-            printfn "%s" ex.Message
+            Progress.error ex.Message
             printfn ""
             printfn "%s" (parser.PrintUsage())
             1
         | ex ->
-            eprintfn $"Unexpected error: {ex.Message}"
+            Progress.error $"Unexpected error: {ex.Message}"
             1
