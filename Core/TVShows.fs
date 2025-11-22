@@ -15,19 +15,16 @@ let ThresholdSizeMB = 100L<MB>
 // ============================================================================
 
 /// Partition files into main files (videos) and extra files
-let private partitionFiles (files: seq<ExistingFile>) =
-    Utility.Seq.partition (fun file ->
+let private partitionFiles (files: ExistingFile list) =
+    files |> List.partition (fun file ->
         match file with
         | VideoFile ThresholdSizeMB _ -> true
-        | _ -> false) files
+        | _ -> false)
 
 /// Remove common suffixes from filenames for matching
 let private normalizeFileName (fileName: string) =
     let removeSuffix (suffix: string) (s: string) =
-        if s.EndsWith(suffix) then
-            s.Substring(0, s.Length - suffix.Length)
-        else
-            s
+        if s.EndsWith(suffix) then s.Substring(0, s.Length - suffix.Length) else s
     
     let removeRippingGroup (s: string) =
         Regex.Replace(s, @"\s\([\w\.\-\s\,]+\)?$", String.Empty)
@@ -41,30 +38,22 @@ let private normalizeFileName (fileName: string) =
     |> removeRippingGroup
 
 /// Find orphaned extra files (no corresponding main video file) - pure function
-let private findOrphanedFiles (mainFiles: seq<ExistingFile>) (extraFiles: seq<ExistingFile>) 
+let private findOrphanedFiles (mainFiles: ExistingFile list) (extraFiles: ExistingFile list) 
     : DeletableItem list =
     
-    if Seq.isEmpty mainFiles then
-        extraFiles 
-        |> Seq.map (fun f -> DeletableItem.fromFile f.FullPath)
-        |> Seq.toList
+    if List.isEmpty mainFiles then
+        extraFiles |> List.map (fun f -> DeletableItem.fromFile f.FullPath)
     else
-        let mainFileNames =
-            mainFiles
-            |> Seq.map (fun f -> normalizeFileName f.Name)
-            |> Set.ofSeq
+        let mainFileNames = mainFiles |> List.map (fun f -> normalizeFileName f.Name) |> Set.ofList
         
         extraFiles
-        |> Seq.filter (fun extraFile ->
+        |> List.filter (fun extraFile ->
             match extraFile with
             | FolderImage _ -> false
             | _ ->
                 let normalizedName = normalizeFileName extraFile.Name
-                mainFileNames
-                |> Set.exists (fun mainName -> mainName.Contains(normalizedName))
-                |> not)
-        |> Seq.map (fun f -> DeletableItem.fromFile f.FullPath)
-        |> Seq.toList
+                mainFileNames |> Set.exists (fun mainName -> mainName.Contains(normalizedName)) |> not)
+        |> List.map (fun f -> DeletableItem.fromFile f.FullPath)
 
 // ============================================================================
 // Directory Classification (Pure)
@@ -75,127 +64,93 @@ type DirectoryClassification =
     | NoVideos of directoryPath: string
 
 /// Classify a directory based on its files - pure function
-let private classifyDirectory (dirPath: string) (allFiles: seq<ExistingFile>) : DirectoryClassification =
-    let mainFiles, extraFiles = partitionFiles allFiles
+let private classifyDirectory (dirPath: string, files: ExistingFile list) : DirectoryClassification =
+    let mainFiles, extraFiles = partitionFiles files
     
-    if Seq.isEmpty mainFiles then
+    if List.isEmpty mainFiles then
         NoVideos dirPath
     else
-        let orphanedFiles = findOrphanedFiles mainFiles extraFiles
-        HasVideos orphanedFiles
+        HasVideos (findOrphanedFiles mainFiles extraFiles)
 
 /// Extract deletable items from classifications - pure function
 let private extractDeletableItems (classifications: DirectoryClassification list) : DeletableItem list =
-    let allOrphans = 
+    let orphans = 
         classifications 
-        |> List.choose (function 
-            | HasVideos files -> Some files 
-            | _ -> None)
-        |> List.concat
+        |> List.collect (function HasVideos files -> files | _ -> [])
     
     let emptyDirs = 
         classifications 
-        |> List.choose (function 
-            | NoVideos dir -> Some (DeletableItem.fromDirectory dir)
-            | _ -> None)
+        |> List.choose (function NoVideos dir -> Some (DeletableItem.fromDirectory dir) | _ -> None)
     
-    List.append allOrphans emptyDirs
-    |> List.sortBy DeletableItem.path
+    List.append orphans emptyDirs |> List.sortBy DeletableItem.path
 
 // ============================================================================
 // File Gathering (Infrastructure)
 // ============================================================================
 
 /// Gather all files for a directory including non-special subdirectories
-let private gatherDirectoryFiles (dir: string) : ExistingFile list =
-    let currentFiles = getFiles dir
+let private gatherDirectoryFiles (dir: string) : string * ExistingFile list =
+    let currentFiles = getFiles dir |> Seq.toList
     
     let subDirFiles =
         try
             DirectoryInfo(dir).EnumerateDirectories("*", SearchOption.TopDirectoryOnly)
             |> Seq.filter (shouldSkipDirectory >> not)
             |> Seq.collect (fun subDir -> getFiles subDir.FullName)
+            |> Seq.toList
         with
-        | _ -> Seq.empty
+        | _ -> []
     
-    Seq.append currentFiles subDirFiles |> Seq.toList
+    (dir, List.append currentFiles subDirFiles)
+
+// ============================================================================
+// Pipeline Helpers
+// ============================================================================
+
+/// Execute deletion of items, returning the items on success
+let private executeDelete (logFilePath: string) (items: DeletableItem list) : Result<DeletableItem list, DomainError> =
+    Logging.logListToFile logFilePath (items |> Seq.map DeletableItem.path)
+    
+    let files = items |> List.choose (function DeletableItem.File p -> Some p | _ -> None)
+    let dirs = items |> List.choose (function DeletableItem.Directory p -> Some p | _ -> None)
+    
+    let fileResult = 
+        if List.isEmpty files then Ok () 
+        else deleteFiles files |> Result.liftCleaningError
+    
+    let dirResult = 
+        if List.isEmpty dirs then Ok () 
+        else deleteDirectories dirs |> Result.liftCleaningError
+    
+    match fileResult, dirResult with
+    | Ok _, Ok _ -> Ok items
+    | Error e, _ -> Error e
+    | _, Error e -> Error e
 
 // ============================================================================
 // Main Clean Function
 // ============================================================================
 
 /// Clean TV show directories
-let clean (path: string) (previewMode: PreviewMode) 
-    : Result<seq<DeletableItem>, DomainError> =
+let clean (path: string) (previewMode: PreviewMode) : Result<seq<DeletableItem>, DomainError> =
     
     let logFilePath = Path.Combine(path, logFileName)
     let isExecute = (previewMode = Execute)
     
-    // Phase 1: Validate path
-    let validatedPath =
-        Progress.runResult "Validating path" (fun () ->
-            FileSystem.validatePath path |> Result.liftValidationError)
-    
-    match validatedPath with
-    | Error e -> Error e
-    | Ok validPath ->
-        
-        // Phase 2: Get all leaf directories
-        let leafDirsResult =
-            Progress.runResult "Scanning directories" (fun () ->
-                getAllSubdirectories validPath |> Result.liftDirectoryError)
-            |> Result.bind (fun dirs ->
-                Progress.runResult "Finding leaf nodes" (fun () ->
-                    filterToLeafNodes dirs |> Result.liftDirectoryError))
-        
-        match leafDirsResult with
-        | Error e -> Error e
-        | Ok leafDirs ->
-            
-            // Phase 3: Classify directories and find orphaned files
-            let classifications =
-                Progress.run "Analyzing directories" (fun () ->
-                    leafDirs
-                    |> Seq.map (fun dir -> 
-                        let files = gatherDirectoryFiles dir
-                        classifyDirectory dir files)
-                    |> Seq.toList)
-            
-            let itemsToDelete = extractDeletableItems classifications
-            
-            if List.isEmpty itemsToDelete then
-                Error (CleaningError (NothingToClean "No orphaned files or empty directories found"))
-            else
-                if isExecute then
-                    // Log before deleting
-                    Logging.logListToFile logFilePath (itemsToDelete |> Seq.map DeletableItem.path)
-                    
-                    // Phase 4: Execute deletions
-                    let files = 
-                        itemsToDelete 
-                        |> List.choose (function DeletableItem.File p -> Some p | _ -> None)
-                    let dirs = 
-                        itemsToDelete 
-                        |> List.choose (function DeletableItem.Directory p -> Some p | _ -> None)
-                    
-                    let deleteResult =
-                        Progress.runResult "Deleting items" (fun () ->
-                            // Delete files first, then directories
-                            let fileResult = 
-                                if List.isEmpty files then Ok ()
-                                else deleteFiles files |> Result.liftCleaningError
-                            
-                            let dirResult = 
-                                if List.isEmpty dirs then Ok ()
-                                else deleteDirectories dirs |> Result.liftCleaningError
-                            
-                            match fileResult, dirResult with
-                            | Ok _, Ok _ -> Ok ()
-                            | Error e, _ -> Error e
-                            | _, Error e -> Error e)
-                    
-                    match deleteResult with
-                    | Ok () -> Ok (itemsToDelete |> List.toSeq)
-                    | Error e -> Error e
-                else
-                    Ok (itemsToDelete |> List.toSeq)
+    Progress.runResult "Validating path" (fun () ->
+        FileSystem.validatePath path |> Result.liftValidationError)
+    |> Result.bind (Progress.wrap "Scanning directories" (getAllSubdirectories >> Result.liftDirectoryError))
+    |> Result.bind (Progress.wrap "Finding leaf nodes" (filterToLeafNodes >> Result.liftDirectoryError))
+    |> Result.map (Progress.wrapMap "Gathering files" (Seq.map gatherDirectoryFiles >> Seq.toList))
+    |> Result.map (Progress.wrapMap "Analyzing directories" (List.map classifyDirectory >> extractDeletableItems))
+    |> Result.bind (fun items ->
+        if List.isEmpty items then
+            Error (CleaningError (NothingToClean "No orphaned files or empty directories found"))
+        else
+            Ok items)
+    |> Result.bind (fun items ->
+        if isExecute then
+            Progress.wrap "Deleting items" (executeDelete logFilePath) items
+        else
+            Ok items)
+    |> Result.map Seq.ofList
