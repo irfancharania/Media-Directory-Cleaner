@@ -23,11 +23,3 @@ let bytesToKiloBytes (x: int64<byte>) : int64<kB> =
 // Convert bytes to megabytes
 let bytesToMegaBytes (x: int64<byte>) : int64<MB> = 
     x / bytesPerKiloByte / kilobytesPerMegaByte
-
-// Helper to create MB literals
-let inline megabytes (x: int64) : int64<MB> = 
-    x * 1L<MB>
-
-// Helper to create kB literals
-let inline kilobytes (x: int64) : int64<kB> = 
-    x * 1L<kB>

@@ -5,6 +5,7 @@ open Xunit
 open Swensen.Unquote
 open Argu
 open CliArguments
+open Domain
 
 module ArguTests =
     

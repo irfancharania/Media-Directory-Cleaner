@@ -47,8 +47,8 @@ type MediaType =
 
 /// Clean mode for the application
 type CleanMode =
+    | Tv
     | Movies
-    | TVShows
     | Music
 
 /// Preview mode - whether to actually delete or just show what would be deleted

@@ -31,11 +31,11 @@ let runClean (cleanFn: string -> PreviewMode -> Result<seq<DeletableItem>, Domai
              (path: string)
              (previewMode: PreviewMode) =
     
-    // Blank line after progress output
-    Progress.info ""
-    
     match cleanFn path previewMode with
     | Ok items ->
+        // Blank line after progress output
+        Progress.info ""
+
         if Seq.isEmpty items then
             printfn "No items to clean."
         else

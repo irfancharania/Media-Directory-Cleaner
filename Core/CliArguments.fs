@@ -1,15 +1,11 @@
 module CliArguments
 
 open Argu
+open Domain
 
 // ============================================================================
 // CLI Argument Types - Shared between Program and Tests
 // ============================================================================
-
-type CleanMode =
-    | Tv
-    | Movies
-    | Music
 
 type CliArguments =
     | [<MainCommand; ExactlyOnce>] Mode of CleanMode

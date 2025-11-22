@@ -35,14 +35,3 @@ module Result =
     /// Lift a cleaning error to a domain error
     let liftCleaningError result =
         result |> Result.mapError CleaningError
-    
-    /// Perform side effect only when condition is true
-    let teeIf condition f result =
-        result |> Result.tee (fun value -> if condition then f value)
-    
-    /// Try to perform an operation, catching exceptions and converting to Result
-    let ofExn exnMapper f =
-        try
-            Ok (f())
-        with
-        | ex -> Error (exnMapper ex)

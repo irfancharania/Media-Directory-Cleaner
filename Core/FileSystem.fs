@@ -3,9 +3,8 @@ module FileSystem
 open System
 open System.IO
 open Domain
-open Size
 open Errors
-open Utility
+open Size
 
 [<Literal>]
 let logFileName = "cleanLog.log"
@@ -34,15 +33,11 @@ let validatePath (path: string) : Result<ValidatedPath, ValidationError> =
 // ============================================================================
 
 /// Check if a directory is a special directory that should be excluded from operations
-/// These directories are never evaluated for deletion themselves
-/// Their fate is determined by their parent folder's size/content
-/// Examples: .actors, .nfo, extrafanart
 let private isSpecialDirectory (dirName: string) : bool =
     dirName.StartsWith(".") || 
     String.Equals(dirName, "extrafanart", StringComparison.OrdinalIgnoreCase)
 
 /// Check if a directory should be skipped when recursing to find files
-/// Used when looking FOR files inside directories (not AT the directories themselves)
 let shouldSkipDirectory (dirInfo: DirectoryInfo) : bool =
     isSpecialDirectory dirInfo.Name
 
@@ -102,20 +97,38 @@ let filterToLeafNodes (directories: seq<ExistingDirectory>)
     if List.isEmpty leafPaths then
         Error (NoLeafNodes "No leaf node directories found")
     else
-        Ok leafPaths
+        Ok (Seq.ofList leafPaths)
 
 // ============================================================================
 // Deletion Operations
 // ============================================================================
 
-/// Delete a list of directories
-let deleteDirectories (paths: seq<string>) : Result<unit, CleaningError> =
-    Result.ofExn 
-        (fun ex -> DeletionFailed ("multiple directories", ex))
-        (fun () -> paths |> Seq.iter (fun path -> Directory.Delete(path, true)))
+/// Delete a single directory
+let private deleteDirectory (path: string) : Result<unit, CleaningError> =
+    try
+        Directory.Delete(path, true)
+        Ok ()
+    with
+    | ex -> Error (DeletionFailed (path, ex))
 
-/// Delete a list of files
+/// Delete a single file
+let private deleteFile (path: string) : Result<unit, CleaningError> =
+    try
+        File.Delete(path)
+        Ok ()
+    with
+    | ex -> Error (DeletionFailed (path, ex))
+
+/// Delete multiple directories, stopping on first error
+let deleteDirectories (paths: seq<string>) : Result<unit, CleaningError> =
+    paths
+    |> Seq.map deleteDirectory
+    |> Seq.tryFind Result.isError
+    |> Option.defaultValue (Ok ())
+
+/// Delete multiple files, stopping on first error
 let deleteFiles (paths: seq<string>) : Result<unit, CleaningError> =
-    Result.ofExn 
-        (fun ex -> DeletionFailed ("multiple files", ex))
-        (fun () -> paths |> Seq.iter File.Delete)
+    paths
+    |> Seq.map deleteFile
+    |> Seq.tryFind Result.isError
+    |> Option.defaultValue (Ok ())
