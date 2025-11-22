@@ -1,5 +1,6 @@
 ﻿open System
 open Argu
+open Errors
 open Domain
 open CliArguments
 
@@ -54,7 +55,7 @@ let runClean (cleanFn: string -> PreviewMode -> Result<seq<DeletableItem>, Domai
             printfn $"Total: {dirs} directories, {files} files"
         0
     | Error error ->
-        match Domain.DomainError.toOptionalMessage error with
+        match DomainError.toOptionalMessage error with
         | Some msg -> 
             Progress.error msg
             1

@@ -5,6 +5,7 @@ open Xunit
 open Swensen.Unquote
 open Domain
 open TestHelpers
+open Errors
 
 module MovieTests = 
 

@@ -3,20 +3,12 @@
 open System.IO
 open FsToolkit.ErrorHandling
 open Domain
+open Errors
 open FileSystem
 open Size
+open Utility
 
 let ThresholdSizeMB = 100L<MB>
-
-// ============================================================================
-// Directory Filtering (Pure)
-// ============================================================================
-
-/// Filter directories that are below the size threshold
-let private filterDirectoriesBySize (getDirSize: string -> int64<MB>) (directories: seq<string>) 
-    : seq<string> =
-    directories
-    |> Seq.filter (fun path -> getDirSize path < ThresholdSizeMB)
 
 // ============================================================================
 // Subtitle Classification (Pure)
@@ -28,7 +20,7 @@ type SubtitleClassification =
     | ToKeep
 
 /// Classify a subtitle file based on language detection (pure function)
-let private classifySubtitle (file: ExistingFile) (dirFiles: seq<ExistingFile>) : SubtitleClassification =
+let private classifySubtitle (file: ExistingFile) (dirFiles: ExistingFile list) : SubtitleClassification =
     if Subtitle.matchesVideoFile file.FullPath dirFiles then
         ToKeep
     elif Subtitle.shouldDelete file.Name then
@@ -38,17 +30,14 @@ let private classifySubtitle (file: ExistingFile) (dirFiles: seq<ExistingFile>) 
     else
         ToKeep
 
-/// Classify all subtitles in a list of files (pure function)
-let private classifySubtitlesInFiles (filesWithContext: seq<ExistingFile * ExistingFile list>) 
-    : SubtitleClassification list =
-    filesWithContext
-    |> Seq.filter (fun (f, _) -> Subtitle.isSubtitleFile f)
-    |> Seq.map (fun (f, dirFiles) -> classifySubtitle f dirFiles)
-    |> Seq.toList
-
-/// Partition classifications into deletable items and uncertain paths (pure function)
-let private partitionClassifications (classifications: SubtitleClassification list) 
+/// Classify all subtitles from files with their directory context (pure function)
+let private classifySubtitles (filesWithContext: (ExistingFile * ExistingFile list) list) 
     : DeletableItem list * string list =
+    let classifications =
+        filesWithContext
+        |> List.filter (fun (f, _) -> Subtitle.isSubtitleFile f)
+        |> List.map (fun (f, dirFiles) -> classifySubtitle f dirFiles)
+    
     let toDelete = 
         classifications 
         |> List.choose (function ToDelete path -> Some (DeletableItem.fromFile path) | _ -> None)
@@ -58,13 +47,24 @@ let private partitionClassifications (classifications: SubtitleClassification li
     (toDelete, uncertain)
 
 // ============================================================================
+// Directory Analysis (Pure)
+// ============================================================================
+
+/// Filter directories that are below the size threshold (pure - takes size function)
+let private filterSmallDirectories (getDirSize: string -> int64<MB>) (directories: string list) 
+    : DeletableItem list =
+    directories
+    |> List.filter (fun path -> getDirSize path < ThresholdSizeMB)
+    |> List.map DeletableItem.fromDirectory
+
+// ============================================================================
 // File Gathering (Infrastructure)
 // ============================================================================
 
 /// Gather all files with their directory context for subtitle classification
-let private gatherFilesWithContext (directories: seq<string>) : (ExistingFile * ExistingFile list) list =
+let private gatherFilesWithContext (directories: string list) : (ExistingFile * ExistingFile list) list =
     directories
-    |> Seq.collect (fun dir ->
+    |> List.collect (fun dir ->
         let dirFiles = getFiles dir |> Seq.toList
         
         let subDirFiles = 
@@ -73,15 +73,13 @@ let private gatherFilesWithContext (directories: seq<string>) : (ExistingFile * 
                 |> Seq.filter (shouldSkipDirectory >> not)
                 |> Seq.collect (fun subDir -> 
                     let subFiles = getFiles subDir.FullName |> Seq.toList
-                    subFiles |> Seq.map (fun f -> (f, subFiles)))
+                    subFiles |> List.map (fun f -> (f, subFiles)))
                 |> Seq.toList
             with
             | _ -> []
         
         let currentDirPairs = dirFiles |> List.map (fun f -> (f, dirFiles))
-        
-        Seq.append currentDirPairs subDirFiles)
-    |> Seq.toList
+        List.append currentDirPairs subDirFiles)
 
 // ============================================================================
 // Reporting (Side Effects at Edge)
@@ -106,7 +104,6 @@ let private reportUncertainSubtitles (uncertainSubtitles: string list) : unit =
 
 /// Execute deletion of items, returning the items on success
 let private executeDelete (logFilePath: string) (items: DeletableItem list) : Result<DeletableItem list, DomainError> =
-    // Log before deleting
     Logging.logListToFile logFilePath (items |> Seq.map DeletableItem.path)
     
     let folders = items |> List.choose (function DeletableItem.Directory p -> Some p | _ -> None)
@@ -136,46 +133,61 @@ let clean (path: string) (previewMode: PreviewMode) : Result<seq<DeletableItem>,
     let isExecute = (previewMode = Execute)
     let lastRunDate = LastRun.tryGetLastRunDate path
     
+    // Phase 1: Validate path
     Progress.runResult "Validating path" (fun () -> 
         FileSystem.validatePath path |> Result.liftValidationError)
+    
+    // Phase 2: Get all subdirectories
     |> Result.bind (Progress.wrap "Scanning directories" (getAllSubdirectories >> Result.liftDirectoryError))
+    
+    // Phase 3: Filter to leaf nodes
     |> Result.bind (Progress.wrap "Finding leaf nodes" (filterToLeafNodes >> Result.liftDirectoryError))
+    
+    // Phase 4: Filter to changed directories (optimization)
     |> Result.map (fun allDirs ->
-        let dirsToCheck = 
-            allDirs
-            |> LastRun.filterChangedDirectories lastRunDate 
-            |> Seq.toList
-        reportOptimizationStats (Seq.length allDirs) (List.length dirsToCheck)
+        let allDirsList = allDirs |> Seq.toList
+        let dirsToCheck = LastRun.filterChangedDirectories lastRunDate allDirsList |> Seq.toList
+        reportOptimizationStats (List.length allDirsList) (List.length dirsToCheck)
         dirsToCheck)
-    |> Result.map (Progress.wrapMap "Finding small directories" (fun dirs ->
-        dirs 
-        |> filterDirectoriesBySize getDirectorySizeMB
-        |> Seq.map DeletableItem.fromDirectory
-        |> Seq.toList))
-    |> Result.map (fun foldersToDelete ->
+    
+    // Phase 5: Find small directories AND classify subtitles in ALL changed directories
+    |> Result.map (fun dirsToCheck ->
+        // Find small directories to delete
+        let foldersToDelete = 
+            Progress.run "Finding small directories" (fun () ->
+                filterSmallDirectories getDirectorySizeMB dirsToCheck)
+        
+        // Gather files and classify subtitles in ALL directories (not just small ones)
         let filesWithContext = 
             Progress.run "Gathering subtitle info" (fun () -> 
-                gatherFilesWithContext (foldersToDelete |> List.map DeletableItem.path |> List.distinct))
-        let subtitlesToDelete, uncertainSubtitles =
-            filesWithContext
-            |> classifySubtitlesInFiles
-            |> partitionClassifications
+                gatherFilesWithContext dirsToCheck)
         
+        let subtitlesToDelete, uncertainSubtitles =
+            Progress.run "Classifying subtitles" (fun () ->
+                classifySubtitles filesWithContext)
+        
+        // Report uncertain subtitles in preview mode
         if not isExecute then
             reportUncertainSubtitles uncertainSubtitles
         
+        // Combine folders and subtitles
         List.append foldersToDelete subtitlesToDelete
         |> List.distinctBy DeletableItem.path
         |> List.sortBy DeletableItem.path)
+    
+    // Phase 6: Check if anything to clean
     |> Result.bind (fun items ->
         if List.isEmpty items then
             Error (CleaningError (NothingToClean "No directories or subtitles to clean"))
         else
             Ok items)
+    
+    // Phase 7: Execute or preview
     |> Result.bind (fun items ->
         if isExecute then
             Progress.wrap "Deleting items" (executeDelete logFilePath) items
             |> Result.tee (fun _ -> LastRun.saveLastRunDate path |> ignore)
         else
             Ok items)
+    
     |> Result.map Seq.ofList

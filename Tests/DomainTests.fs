@@ -6,6 +6,7 @@ open Domain
 open Size
 open System.IO
 open TestHelpers
+open Errors
 
 module DomainTests =
 

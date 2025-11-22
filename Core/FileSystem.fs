@@ -4,6 +4,8 @@ open System
 open System.IO
 open Domain
 open Size
+open Errors
+open Utility
 
 [<Literal>]
 let logFileName = "cleanLog.log"

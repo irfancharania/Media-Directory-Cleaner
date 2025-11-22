@@ -5,6 +5,8 @@ open FsToolkit.ErrorHandling
 open Domain
 open FileSystem
 open Size
+open Errors
+open Utility
 
 let ThresholdSizeKB = 500L<kB>
 

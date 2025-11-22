@@ -1,9 +1,8 @@
 module Domain
 
-open System
 open System.IO
-open FsToolkit.ErrorHandling
 open Size
+open Errors
 
 // ============================================================================
 // Domain Types - Making illegal states unrepresentable
@@ -15,16 +14,12 @@ type DeletableItem =
     | Directory of path: string
     
 module DeletableItem =
-    /// Get the path regardless of item type
     let path item =
         match item with
         | File path -> path
         | Directory path -> path
     
-    /// Create from a file path
     let fromFile path = File path
-    
-    /// Create from a directory path
     let fromDirectory path = Directory path
 
 /// A validated directory path that is guaranteed to exist
@@ -56,37 +51,13 @@ type CleanMode =
     | TVShows
     | Music
 
-/// Preview mode - if true, don't delete, just show what would be deleted
+/// Preview mode - whether to actually delete or just show what would be deleted
 type PreviewMode = 
     | Preview
     | Execute
 
 // ============================================================================
-// Error Types - Rich, contextual errors
-// ============================================================================
-
-type ValidationError =
-    | PathEmpty
-    | PathNotFound of path: string
-    | PathNotDirectory of path: string
-
-type DirectoryError =
-    | NoSubdirectories of path: string
-    | NoLeafNodes of path: string
-    | NoFilesFound of path: string
-    | AccessDenied of path: string * exn: Exception
-
-type CleaningError =
-    | NothingToClean of reason: string
-    | DeletionFailed of path: string * exn: Exception
-
-type DomainError =
-    | ValidationError of ValidationError
-    | DirectoryError of DirectoryError
-    | CleaningError of CleaningError
-
-// ============================================================================
-// Smart Constructors - Validate at creation time
+// Smart Constructors
 // ============================================================================
 
 module ValidatedPath =
@@ -124,7 +95,7 @@ module ExistingFile =
         | ".mp3" | ".m4a" | ".flac" | ".wav" | ".wma" | ".aac" | ".aiff" 
         | ".m4b" | ".m4p" | ".ogg" -> Audio
         | ".jpg" | ".jpeg" | ".png" | ".gif" | ".bmp" | ".tif" | ".tiff" -> Image
-        | ".srt" | ".sub" | ".sbv" | ".ass" | ".ssa" | ".vtt" -> Subtitle
+        | ".srt" | ".sub" | ".sbv" | ".ass" | ".ssa" | ".vtt" -> MediaType.Subtitle
         | _ -> Other
 
 module ExistingDirectory =
@@ -132,186 +103,6 @@ module ExistingDirectory =
     let fromDirectoryInfo (dirInfo: DirectoryInfo) : ExistingDirectory =
         { FullPath = dirInfo.FullName
           Name = dirInfo.Name }
-
-// ============================================================================
-// Subtitle Language Detection
-// ============================================================================
-
-module Subtitle =
-    
-    /// ISO 639-2/3 language codes that should be DELETED (not kept)
-    /// Updated to keep English and French (including Canadian French)
-    /// Includes common variants and alternative codes
-    /// Source: https://www.opensubtitles.org/
-    let private languagesToDelete = [
-        // Arabic
-        "ara"; "arb"; "ar"; "arabic" 
-        // Asian languages
-        "chi"; "zho"; "zh"; "cmn"; "yue"; "chinese"  // Chinese (Mandarin, Cantonese)
-        "jpn"; "ja"; "jp"; "japanese" 
-        "kor"; "ko"; "kr"; "korean" 
-        "tha"; "th"; "thai"
-        "vie"; "vi"; "vietnamese"
-        "hin"; "hi"; "hindi"
-        "kan"; "kn"; "kannada"
-        "mal"; "ml"; "malayalam"
-        "tam"; "ta"; "tamil"
-        "tel"; "te"; "telugu"
-        "ben"; "bn"; "bengali"
-        "mar"; "marathi"
-        "pan"; "pa"; "punjabi"
-        // European languages (excluding English and French)
-        "spa"; "es"; "esp"; "spanish"
-        "por"; "pt"; "pt-br"; "portuguese"
-        "ger"; "deu"; "de"; "german"
-        "ita"; "italian"
-        "dut"; "nld"; "nl"; "dutch"
-        "pol"; "pl"; "polish"
-        "rus"; "ru"; "russian"
-        "ukr"; "ukrainian"
-        "cze"; "ces"; "cs"; "czech"
-        "swe"; "sv"; "swedish"
-        "dan"; "da"; "danish"
-        "nor"; "no"; "nob"; "nno"; "norwegian"
-        "fin"; "fi" ; "finnish"
-        "gre"; "ell"; "el"; "greek"
-        "tur"; "tr"; "turkish"
-        "hun"; "hu"; "hungarian"
-        "rum"; "ron"; "ro"; "romanian"
-        "bul"; "bg"; "bulgarian"
-        "hrv"; "hr"; "croatian"
-        "srp"; "sr"; "serbian"
-        "slv"; "sl"; "slovenian"
-        "slo"; "slk"; "sk"; "slovak"
-        "bos"; "bs"; "bosnian"
-        "mac"; "mkd"; "mk"; "macedonian"
-        "alb"; "sqi"; "sq"; "albanian"
-        "est"; "et"; "estonian"
-        "lav"; "lv"; "latvian"
-        "lit"; "lt"; "lithuanian"
-        "ice"; "isl"; "is"; "icelandic"
-        // Other European
-        "baq"; "eus"; "eu"; "basque"
-        "cat"; "ca"; "catalan"
-        "glg"; "gl"; "galician"
-        "arm"; "hye"; "hy"; "armenian"
-        "geo"; "kat"; "ka"; "georgian"
-        // Middle Eastern
-        "heb"; "hebrew"
-        "per"; "fas"; "fa"; "persian"; "farsi"
-        // Southeast Asian
-        "may"; "msa"; "ms"; "malay"
-        "ind"; "id"; "indonesian"
-        "fil"; "tl"; "filipino"; "tagalog"
-        // Other
-        "swa"; "sw"; "swahili"
-    ]
-    
-    /// Language indicators to KEEP (English and French variants)
-    let private languagesToKeep = [
-        // English variants
-        "english"; "eng"; "en"
-        // French variants (standard ISO codes first for better matching)
-        "fra"; "fre"; "fr"; "french"; "francais"; "français"
-        // Canadian French variants
-        "fr-ca"; "frc"; "frca"; "french-canadian"; "canadien"; "quebec"; "québec"
-    ]
-    
-    /// Check if filename contains a language code from the given list
-    /// Matches patterns: .code., _code_, .code.srt, _code.srt, code.srt (at start)
-    let private containsLanguageCode (codes: string list) (filename: string) =
-        let lower = filename.ToLowerInvariant()
-        codes
-        |> List.exists (fun code -> 
-            lower.Contains($".{code}.") || 
-            lower.Contains($"_{code}_") || 
-            lower.Contains($".{code}_") || 
-            lower.Contains($"_{code}.") || 
-            lower.Contains($"-{code}.") ||
-            lower.Contains($"-{code}_") ||
-            lower.EndsWith($".{code}.srt") ||
-            lower.EndsWith($"_{code}.srt") ||
-            lower.EndsWith($".{code}.sub") ||
-            lower.EndsWith($"_{code}.sub") ||
-            lower.StartsWith($"{code}.") ||
-            lower.StartsWith($"{code}_") ||
-            lower = $"{code}.srt" ||
-            lower = $"{code}.sub")
-    
-    /// Determine if a subtitle file should be deleted
-    /// Returns true if we're confident it should be DELETED (not English/French)
-    /// Returns false if it's English/French OR we're uncertain (err on the side of caution)
-    let shouldDelete (filename: string) : bool =
-        let hasLanguageToKeep = containsLanguageCode languagesToKeep filename
-        let hasLanguageToDelete = containsLanguageCode languagesToDelete filename
-        
-        match hasLanguageToKeep, hasLanguageToDelete with
-        | true, _ -> false      // Explicitly English/French - keep it
-        | false, true -> true   // Has other language code - delete it
-        | false, false -> false // Uncertain - keep it (safe default)
-    
-    /// Check if a subtitle file's language is uncertain (no recognizable language code)
-    /// Used for reporting in preview mode
-    let isUncertain (filename: string) : bool =
-        let hasLanguageToKeep = containsLanguageCode languagesToKeep filename
-        let hasLanguageToDelete = containsLanguageCode languagesToDelete filename
-        
-        match hasLanguageToKeep, hasLanguageToDelete with
-        | false, false -> true  // No language code detected - uncertain
-        | _ -> false            // Language detected (either keep or delete)
-    
-    /// Check if file is a subtitle by extension
-    let isSubtitleFile (file: ExistingFile) : bool =
-        match file.Extension with
-        | ".srt" | ".sub" | ".sbv" | ".ass" | ".ssa" | ".vtt" -> true
-        | _ -> false
-    
-    /// Check if subtitle filename matches a video file in the same directory
-    /// If it does, we should keep it (guaranteed to be wanted)
-    let matchesVideoFile (subtitlePath: string) (dirFiles: seq<ExistingFile>) : bool =
-        let subtitleBase = Path.GetFileNameWithoutExtension(subtitlePath).ToLowerInvariant()
-        
-        dirFiles
-        |> Seq.filter (fun f -> ExistingFile.classifyMediaType f = Video)
-        |> Seq.exists (fun videoFile ->
-            let videoBase = Path.GetFileNameWithoutExtension(videoFile.Name).ToLowerInvariant()
-            subtitleBase = videoBase)
-
-// ============================================================================
-// Error Formatting
-// ============================================================================
-
-module DomainError =
-    let toMessage error =
-        match error with
-        | ValidationError ve ->
-            match ve with
-            | PathEmpty -> "Path cannot be empty"
-            | PathNotFound path -> $"Directory not found: {path}"
-            | PathNotDirectory path -> $"Path is not a directory: {path}"
-        
-        | DirectoryError de ->
-            match de with
-            | NoSubdirectories path -> $"No subdirectories found in: {path}"
-            | NoLeafNodes path -> $"No leaf nodes found in: {path}"
-            | NoFilesFound path -> $"No files found in: {path}"
-            | AccessDenied (path, ex) -> $"Access denied to: {path} ({ex.Message})"
-        
-        | CleaningError ce ->
-            match ce with
-            | NothingToClean reason -> $"Nothing to clean: {reason}"
-            | DeletionFailed (path, ex) -> $"Failed to delete: {path} ({ex.Message})"
-    
-    /// Convert to an optional message (empty for non-critical errors)
-    let toOptionalMessage error =
-        match error with
-        | DirectoryError (NoSubdirectories _)
-        | DirectoryError (NoLeafNodes _)
-        | DirectoryError (NoFilesFound _)
-        | CleaningError (NothingToClean _) -> 
-            None  // These are expected conditions, not errors to report
-        | _ -> 
-            Some (toMessage error)
 
 // ============================================================================
 // Active Patterns for File Classification
@@ -339,31 +130,3 @@ module FilePatterns =
             Some file
         else
             None
-
-// ============================================================================
-// Result Helpers
-// ============================================================================
-
-module Result =
-    /// Lift a validation error to a domain error
-    let liftValidationError result =
-        result |> Result.mapError ValidationError
-    
-    /// Lift a directory error to a domain error
-    let liftDirectoryError result =
-        result |> Result.mapError DirectoryError
-    
-    /// Lift a cleaning error to a domain error
-    let liftCleaningError result =
-        result |> Result.mapError CleaningError
-    
-    /// Perform side effect only when condition is true
-    let teeIf condition f result =
-        result |> Result.tee (fun value -> if condition then f value)
-    
-    /// Try to perform an operation, catching exceptions and converting to Result
-    let ofExn exnMapper f =
-        try
-            Ok (f())
-        with
-        | ex -> Error (exnMapper ex)
