@@ -1,9 +1,8 @@
-namespace MediaDirectoryCleaner.Tests
+namespace MediaDirectoryCleaner.Tests.Unit
 
 open Xunit
 open FsCheck
 open FsCheck.Xunit
-open Domain
 
 /// Property-based tests for subtitle language detection.
 type SubtitlePropertyTests() =

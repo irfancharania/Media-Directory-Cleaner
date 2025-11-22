@@ -1,4 +1,4 @@
-namespace MediaDirectoryCleaner.Tests
+namespace MediaDirectoryCleaner.Tests.Integration
 
 open System
 open System.IO

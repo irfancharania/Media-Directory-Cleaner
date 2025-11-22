@@ -1,4 +1,4 @@
-namespace MediaDirectoryCleaner.Tests
+namespace MediaDirectoryCleaner.Tests.Unit
 
 open System
 open Xunit
@@ -125,16 +125,11 @@ module ArguTests =
         raises<ArguParseException> <@ parser.ParseCommandLine(args, raiseOnUsage = true) @>
     
     [<Fact>]
-    let ``lowercase movies fails (case sensitive)``() =
+    let ``lowercase movies parsing behavior``() =
         let args = [| "movies"; "-p"; "C:\\Movies" |]
-        // Note: lowercase "movies" should fail since DU is "Movies"
-        // If your implementation differs, adjust this test
-        
-        // This test depends on whether Argu is case-sensitive for MainCommand
-        // Test both scenarios:
+        // Argu handles case insensitivity for DU cases
         try
             let results = parser.ParseCommandLine(args)
-            // If it succeeds, mode should still be parsed
             test <@ results.GetResult(CliArguments.Mode) = CleanMode.Movies @>
         with
         | :? ArguParseException -> 

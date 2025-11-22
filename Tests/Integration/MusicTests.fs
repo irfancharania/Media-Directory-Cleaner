@@ -1,4 +1,4 @@
-namespace MediaDirectoryCleaner.Tests
+namespace MediaDirectoryCleaner.Tests.Integration
 
 open System.IO
 open Xunit
@@ -26,8 +26,8 @@ module MusicTests =
                 let files, dirs = countItems items
                 test <@ dirs = 1 @>
                 test <@ files = 0 @>
-            | Error _ ->
-                failwith "Should have found empty album"
+            | Error e ->
+                failwithf $"Expected Ok with items, got: {DomainError.toMessage e}"
         )
     
     [<Fact>]
@@ -54,8 +54,8 @@ module MusicTests =
                 let files, dirs = countItems items
                 test <@ dirs = 3 @>
                 test <@ files = 0 @>
-            | Error _ ->
-                failwith "Should have found empty albums"
+            | Error e ->
+                failwithf $"Expected Ok with items, got: {DomainError.toMessage e}"
         )
 
     // ============================================================================
@@ -72,15 +72,15 @@ module MusicTests =
                 let album = Path.Combine(testDir, "Artist", "Good Album")
                 test <@ not (containsDirectory album items) @>
             | Error (CleaningError (NothingToClean _)) ->
-                () // Expected - nothing to clean
+                ()
             | Error e ->
-                failwithf $"Unexpected error: {e}"
+                failwithf $"Unexpected error: {DomainError.toMessage e}"
         )
     
     [<Fact>]
     let ``Album with single small audio file is kept``() =
         let structure = [
-            ("Artist/Album/track.mp3", Some 1000L)  // Tiny file
+            ("Artist/Album/track.mp3", Some 1000L)
             ("Artist/Album/cover.jpg", Some 50000L)
         ]
         
@@ -89,13 +89,12 @@ module MusicTests =
             
             match result with
             | Ok items ->
-                // Album kept despite small audio file
                 let album = Path.Combine(testDir, "Artist", "Album")
                 test <@ not (containsDirectory album items) @>
             | Error (CleaningError (NothingToClean _)) ->
-                () // Expected
+                ()
             | Error e ->
-                failwithf $"Unexpected error: {e}"
+                failwithf $"Unexpected error: {DomainError.toMessage e}"
         )
 
     // ============================================================================
@@ -116,15 +115,15 @@ module MusicTests =
             | Ok _ ->
                 failwith "Should not find items to delete"
             | Error (CleaningError (NothingToClean _)) ->
-                () // Expected
+                ()
             | Error e ->
-                failwithf $"Unexpected error: {e}"
+                failwithf $"Unexpected error: {DomainError.toMessage e}"
         )
     
     [<Fact>]
     let ``Album with flac files is kept``() =
         let structure = [
-            ("Artist/Album/track.flac", Some 20000000L)  // 20 MB
+            ("Artist/Album/track.flac", Some 20000000L)
             ("Artist/Album/cover.jpg", Some 50000L)
         ]
         
@@ -135,9 +134,9 @@ module MusicTests =
             | Ok _ ->
                 failwith "Should not find items to delete"
             | Error (CleaningError (NothingToClean _)) ->
-                () // Expected
+                ()
             | Error e ->
-                failwithf $"Unexpected error: {e}"
+                failwithf $"Unexpected error: {DomainError.toMessage e}"
         )
     
     [<Fact>]
@@ -154,9 +153,9 @@ module MusicTests =
             | Ok _ ->
                 failwith "Should not find items to delete"
             | Error (CleaningError (NothingToClean _)) ->
-                () // Expected
+                ()
             | Error e ->
-                failwithf $"Unexpected error: {e}"
+                failwithf $"Unexpected error: {DomainError.toMessage e}"
         )
     
     [<Fact>]
@@ -172,9 +171,9 @@ module MusicTests =
             | Ok _ ->
                 failwith "Should not find items to delete"
             | Error (CleaningError (NothingToClean _)) ->
-                () // Expected
+                ()
             | Error e ->
-                failwithf $"Unexpected error: {e}"
+                failwithf $"Unexpected error: {DomainError.toMessage e}"
         )
 
     // ============================================================================
@@ -184,9 +183,8 @@ module MusicTests =
     [<Fact>]
     let ``Album under 500KB with no audio is deleted``() =
         let structure = [
-            ("Artist/Small/cover.jpg", Some 250000L)  // 250 KB
-            ("Artist/Small/info.txt", Some 200000L)   // 200 KB
-            // Total: 450 KB, no audio
+            ("Artist/Small/cover.jpg", Some 250000L)
+            ("Artist/Small/info.txt", Some 200000L)
         ]
         
         withTestDir structure (fun testDir ->
@@ -196,14 +194,14 @@ module MusicTests =
             | Ok items ->
                 let album = Path.Combine(testDir, "Artist", "Small")
                 test <@ containsDirectory album items @>
-            | Error _ ->
-                failwith "Should delete album under threshold"
+            | Error e ->
+                failwithf $"Expected Ok with items, got: {DomainError.toMessage e}"
         )
     
     [<Fact>]
     let ``Large audio file by size threshold is kept``() =
         let structure = [
-            ("Artist/Album/large.mp3", Some 600000L)  // 600 KB - over threshold
+            ("Artist/Album/large.mp3", Some 600000L)
             ("Artist/Album/cover.jpg", Some 50000L)
         ]
         
@@ -214,9 +212,9 @@ module MusicTests =
             | Ok _ ->
                 failwith "Should not find items to delete"
             | Error (CleaningError (NothingToClean _)) ->
-                () // Expected - audio file over 500KB threshold
+                ()
             | Error e ->
-                failwithf $"Unexpected error: {e}"
+                failwithf $"Unexpected error: {DomainError.toMessage e}"
         )
 
     // ============================================================================
@@ -226,12 +224,9 @@ module MusicTests =
     [<Fact>]
     let ``Mix of empty and valid albums``() =
         let structure = [
-            // Valid album 1
             ("Artist/Album1/track.mp3", Some 5000000L)
             ("Artist/Album1/cover.jpg", Some 50000L)
-            // Empty album
             ("Artist/Empty/cover.jpg", Some 50000L)
-            // Valid album 2
             ("Artist/Album2/song.flac", Some 20000000L)
         ]
         
@@ -240,11 +235,9 @@ module MusicTests =
             
             match result with
             | Ok items ->
-                // Only empty album deleted
                 let empty = Path.Combine(testDir, "Artist", "Empty")
                 test <@ containsDirectory empty items @>
                 
-                // Valid albums NOT deleted
                 let a1 = Path.Combine(testDir, "Artist", "Album1")
                 let a2 = Path.Combine(testDir, "Artist", "Album2")
                 test <@ not (containsDirectory a1 items) @>
@@ -253,18 +246,15 @@ module MusicTests =
                 let files, dirs = countItems items
                 test <@ dirs = 1 @>
                 test <@ files = 0 @>
-            | Error _ ->
-                failwith "Should have found empty album"
+            | Error e ->
+                failwithf $"Expected Ok with items, got: {DomainError.toMessage e}"
         )
     
     [<Fact>]
     let ``Multiple artists with mixed albums``() =
         let structure = [
-            // Artist 1 - has audio
             ("Artist1/Album/track.mp3", Some 5000000L)
-            // Artist 2 - empty
             ("Artist2/Album/cover.jpg", Some 50000L)
-            // Artist 3 - has audio
             ("Artist3/Album/song.wav", Some 30000000L)
         ]
         
@@ -273,14 +263,13 @@ module MusicTests =
             
             match result with
             | Ok items ->
-                // Only Artist2's album deleted
                 let a2 = Path.Combine(testDir, "Artist2", "Album")
                 test <@ containsDirectory a2 items @>
                 
                 let files, dirs = countItems items
                 test <@ dirs = 1 @>
-            | Error _ ->
-                failwith "Should have found empty album"
+            | Error e ->
+                failwithf $"Expected Ok with items, got: {DomainError.toMessage e}"
         )
 
     // ============================================================================
@@ -300,15 +289,15 @@ module MusicTests =
             | Ok items ->
                 let album = Path.Combine(testDir, "Genre", "Artist", "Album")
                 test <@ containsDirectory album items @>
-            | Error _ ->
-                failwith "Should find nested empty album"
+            | Error e ->
+                failwithf $"Expected Ok with items, got: {DomainError.toMessage e}"
         )
     
     [<Fact>]
     let ``Album with audio in parent has empty subdirectory``() =
         let structure = [
             ("Artist/Album/track.mp3", Some 5000000L)
-            ("Artist/Album/Bonus/cover.jpg", Some 50000L)  // Empty subdir
+            ("Artist/Album/Bonus/cover.jpg", Some 50000L)
         ]
         
         withTestDir structure (fun testDir ->
@@ -316,15 +305,13 @@ module MusicTests =
             
             match result with
             | Ok items ->
-                // Empty Bonus subdirectory should be marked for deletion
                 let bonus = Path.Combine(testDir, "Artist", "Album", "Bonus")
                 test <@ containsDirectory bonus items @>
                 
-                // Parent album NOT deleted
                 let album = Path.Combine(testDir, "Artist", "Album")
                 test <@ not (containsDirectory album items) @>
-            | Error _ ->
-                failwith "Should find empty subdirectory"
+            | Error e ->
+                failwithf $"Expected Ok with items, got: {DomainError.toMessage e}"
         )
 
     // ============================================================================
@@ -346,10 +333,9 @@ module MusicTests =
             match result with
             | Ok items ->
                 test <@ containsDirectory album items @>
-                // Verify actual deletion
                 test <@ not (Directory.Exists(album)) @>
             | Error e ->
-                failwithf $"Unexpected error: {e}"
+                failwithf $"Unexpected error: {DomainError.toMessage e}"
         )
     
     [<Fact>]
@@ -369,11 +355,10 @@ module MusicTests =
             | Ok _ ->
                 failwith "Should not find items to delete"
             | Error (CleaningError (NothingToClean _)) ->
-                // Verify files still exist
                 test <@ Directory.Exists(album) @>
                 test <@ File.Exists(audioFile) @>
             | Error e ->
-                failwithf $"Unexpected error: {e}"
+                failwithf $"Unexpected error: {DomainError.toMessage e}"
         )
 
     // ============================================================================
@@ -394,9 +379,9 @@ module MusicTests =
             | Ok _ ->
                 failwith "Should return error when nothing to clean"
             | Error (CleaningError (NothingToClean _)) ->
-                () // Expected
+                ()
             | Error e ->
-                failwithf $"Unexpected error type: {e}"
+                failwithf $"Unexpected error type: {DomainError.toMessage e}"
         )
     
     [<Fact>]
@@ -405,9 +390,9 @@ module MusicTests =
         
         match result with
         | Error (ValidationError (PathNotFound _)) ->
-            () // Expected
+            ()
         | Error e ->
-            failwithf $"Unexpected error type: {e}"
+            failwithf $"Unexpected error type: {DomainError.toMessage e}"
         | Ok _ ->
             failwith "Should return error for invalid path"
     
@@ -431,8 +416,8 @@ module MusicTests =
             | Ok items ->
                 let album = Path.Combine(testDir, "Artist", "Album")
                 test <@ containsDirectory album items @>
-            | Error _ ->
-                failwith "Should delete metadata-only album"
+            | Error e ->
+                failwithf $"Expected Ok with items, got: {DomainError.toMessage e}"
         )
     
     [<Fact>]
@@ -448,7 +433,7 @@ module MusicTests =
             | Ok _ ->
                 failwith "Should not find items to delete"
             | Error (CleaningError (NothingToClean _)) ->
-                () // Expected - ogg is audio format
+                ()
             | Error e ->
-                failwithf $"Unexpected error: {e}"
+                failwithf $"Unexpected error: {DomainError.toMessage e}"
         )

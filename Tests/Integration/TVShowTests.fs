@@ -1,4 +1,4 @@
-namespace MediaDirectoryCleaner.Tests
+namespace MediaDirectoryCleaner.Tests.Integration
 
 open System.IO
 open Xunit
@@ -20,18 +20,16 @@ module TVShowTests =
         
             match result with
             | Ok items ->
-                // Should not delete season folder (has videos)
                 let season1 = Path.Combine(testDir, "Drama", "Season 01")
                 test <@ not (containsDirectory season1 items) @>
                 
-                // Verify all items are files, not directories
                 let _, dirs = countItems items
                 test <@ dirs = 0 @>
             | Error (DirectoryError (NoLeafNodes _)) 
             | Error (CleaningError (NothingToClean _)) ->
-                () // Expected - nothing to clean
+                ()
             | Error e ->
-                failwithf $"Unexpected error: {e}"
+                failwithf $"Unexpected error: {DomainError.toMessage e}"
         )
 
     // ============================================================================
@@ -43,7 +41,6 @@ module TVShowTests =
         let structure = [
             ("Show/banner.jpg", Some 18811L)
             ("Show/poster.jpg", Some 63078L)
-            // Season with metadata but NO video
             ("Show/Season 02/episode.nfo", Some 2424L)
             ("Show/Season 02/thumb.jpg", Some 37050L)
         ]
@@ -55,8 +52,8 @@ module TVShowTests =
             | Ok items ->
                 let season2 = Path.Combine(testDir, "Show", "Season 02")
                 test <@ containsDirectory season2 items @>
-            | Error _ ->
-                failwith "Should have found empty season to delete"
+            | Error e ->
+                failwithf $"Expected Ok with items, got: {DomainError.toMessage e}"
         )
     
     [<Fact>]
@@ -84,8 +81,8 @@ module TVShowTests =
                 let files, dirs = countItems items
                 test <@ dirs = 3 @>
                 test <@ files = 0 @>
-            | Error _ ->
-                failwith "Should have found empty seasons"
+            | Error e ->
+                failwithf $"Expected Ok with items, got: {DomainError.toMessage e}"
         )
 
     // ============================================================================
@@ -96,11 +93,9 @@ module TVShowTests =
     let ``Orphaned metadata files should be deleted``() =
         let structure = [
             ("Show/poster.jpg", Some 63078L)
-            // Episode 1 has video
             ("Show/Season 01/Show.S01E01.mkv", Some 664624081L)
             ("Show/Season 01/Show.S01E01.srt", Some 36816L)
             ("Show/Season 01/Show.S01E01.nfo", Some 2424L)
-            // Episode 2 - ORPHANED metadata (no video)
             ("Show/Season 01/Show.S01E02.srt", Some 38139L)
             ("Show/Season 01/Show.S01E02.nfo", Some 2604L)
             ("Show/Season 01/Show.S01E02-thumb.jpg", Some 42952L)
@@ -111,7 +106,6 @@ module TVShowTests =
         
             match result with
             | Ok items ->
-                // Should delete orphaned files
                 let e02srt = Path.Combine(testDir, "Show", "Season 01", "Show.S01E02.srt")
                 let e02nfo = Path.Combine(testDir, "Show", "Season 01", "Show.S01E02.nfo")
                 let e02thumb = Path.Combine(testDir, "Show", "Season 01", "Show.S01E02-thumb.jpg")
@@ -120,29 +114,24 @@ module TVShowTests =
                 test <@ containsFile e02nfo items @>
                 test <@ containsFile e02thumb items @>
             
-                // Should NOT delete season folder
                 let season1 = Path.Combine(testDir, "Show", "Season 01")
                 test <@ not (containsDirectory season1 items) @>
             
-                // Should NOT delete matched metadata
                 test <@ not (containsPathSubstring "S01E01" items) @>
                 
                 let files, dirs = countItems items
                 test <@ files = 3 @>
                 test <@ dirs = 0 @>
-            | Error _ ->
-                failwith "Should have found orphaned metadata"
+            | Error e ->
+                failwithf $"Expected Ok with items, got: {DomainError.toMessage e}"
         )
     
     [<Fact>]
     let ``Orphaned files with different naming patterns``() =
         let structure = [
-            // Video exists
             ("Show/Season 01/Episode_01.mp4", Some 600000000L)
-            // Matching metadata
             ("Show/Season 01/Episode_01.srt", Some 50000L)
             ("Show/Season 01/Episode_01.nfo", Some 2000L)
-            // Orphaned with underscore
             ("Show/Season 01/Episode_02.srt", Some 50000L)
             ("Show/Season 01/Episode_02-thumb.jpg", Some 40000L)
         ]
@@ -152,13 +141,11 @@ module TVShowTests =
             
             match result with
             | Ok items ->
-                // Orphaned files deleted
                 test <@ containsPathSubstring "Episode_02" items @>
-                // Matched files NOT deleted
                 test <@ not (containsPathSubstring "Episode_01.srt" items) @>
                 test <@ not (containsPathSubstring "Episode_01.nfo" items) @>
-            | Error _ ->
-                failwith "Should have found orphaned files"
+            | Error e ->
+                failwithf $"Expected Ok with items, got: {DomainError.toMessage e}"
         )
 
     // ============================================================================
@@ -178,12 +165,11 @@ module TVShowTests =
             
             match result with
             | Ok items ->
-                // English subtitles should be kept (not orphaned)
                 test <@ Seq.isEmpty items @>
             | Error (CleaningError (NothingToClean _)) ->
-                () // Expected
+                ()
             | Error e ->
-                failwithf $"Unexpected error: {e}"
+                failwithf $"Unexpected error: {DomainError.toMessage e}"
         )
     
     [<Fact>]
@@ -198,12 +184,11 @@ module TVShowTests =
             
             match result with
             | Ok items ->
-                // Thumb should match video (not orphaned)
                 test <@ Seq.isEmpty items @>
             | Error (CleaningError (NothingToClean _)) ->
-                () // Expected
+                ()
             | Error e ->
-                failwithf $"Unexpected error: {e}"
+                failwithf $"Unexpected error: {DomainError.toMessage e}"
         )
 
     // ============================================================================
@@ -216,7 +201,6 @@ module TVShowTests =
             ("Show/poster.jpg", Some 63078L)
             ("Show/.actors/hero.jpg", Some 29347L)
             ("Show/.actors/villain.jpg", Some 33759L)
-            // Season with video
             ("Show/Season 01/Show.S01E01.mkv", Some 664624081L)
         ]
     
@@ -225,12 +209,11 @@ module TVShowTests =
         
             match result with
             | Ok items ->
-                // .actors files should not appear in results
                 test <@ not (containsPathSubstring ".actors" items) @>
             | Error (CleaningError (NothingToClean _)) ->
-                () // Expected - nothing to clean
+                ()
             | Error e ->
-                failwithf $"Unexpected error: {e}"
+                failwithf $"Unexpected error: {DomainError.toMessage e}"
         )
     
     [<Fact>]
@@ -245,11 +228,10 @@ module TVShowTests =
             
             match result with
             | Ok items ->
-                // Season folder deleted, but not because of folder images
                 let season = Path.Combine(testDir, "Show", "Season 01")
                 test <@ containsDirectory season items @>
-            | Error _ ->
-                failwith "Should delete empty season"
+            | Error e ->
+                failwithf $"Expected Ok with items, got: {DomainError.toMessage e}"
         )
 
     // ============================================================================
@@ -260,16 +242,12 @@ module TVShowTests =
     let ``Mix of valid episodes and orphaned files``() =
         let structure = [
             ("Show/poster.jpg", Some 63078L)
-            // Episode 1 - complete
             ("Show/Season 01/E01.mp4", Some 600000000L)
             ("Show/Season 01/E01.srt", Some 50000L)
-            // Episode 2 - orphaned
             ("Show/Season 01/E02.srt", Some 50000L)
             ("Show/Season 01/E02.nfo", Some 2000L)
-            // Episode 3 - complete
             ("Show/Season 01/E03.mp4", Some 600000000L)
             ("Show/Season 01/E03.srt", Some 50000L)
-            // Episode 4 - orphaned
             ("Show/Season 01/E04.nfo", Some 2000L)
         ]
         
@@ -278,24 +256,21 @@ module TVShowTests =
             
             match result with
             | Ok items ->
-                // Orphaned files from E02 and E04
                 test <@ containsPathSubstring "E02.srt" items @>
                 test <@ containsPathSubstring "E02.nfo" items @>
                 test <@ containsPathSubstring "E04.nfo" items @>
                 
-                // Valid episode files NOT deleted
                 test <@ not (containsPathSubstring "E01" items) @>
                 test <@ not (containsPathSubstring "E03" items) @>
                 
-                // Season folder NOT deleted
                 let season = Path.Combine(testDir, "Show", "Season 01")
                 test <@ not (containsDirectory season items) @>
                 
                 let files, dirs = countItems items
                 test <@ files = 3 @>
                 test <@ dirs = 0 @>
-            | Error _ ->
-                failwith "Should have found orphaned files"
+            | Error e ->
+                failwithf $"Expected Ok with items, got: {DomainError.toMessage e}"
         )
 
     // ============================================================================
@@ -317,10 +292,9 @@ module TVShowTests =
             match result with
             | Ok items ->
                 test <@ containsDirectory season items @>
-                // Verify actual deletion
                 test <@ not (Directory.Exists(season)) @>
             | Error e ->
-                failwithf $"Unexpected error: {e}"
+                failwithf $"Unexpected error: {DomainError.toMessage e}"
         )
     
     [<Fact>]
@@ -339,10 +313,9 @@ module TVShowTests =
             match result with
             | Ok items ->
                 test <@ containsFile orphan items @>
-                // Verify actual deletion
                 test <@ not (File.Exists(orphan)) @>
             | Error e ->
-                failwithf $"Unexpected error: {e}"
+                failwithf $"Unexpected error: {DomainError.toMessage e}"
         )
 
     // ============================================================================
@@ -363,9 +336,9 @@ module TVShowTests =
             | Ok _ ->
                 failwith "Should return error when nothing to clean"
             | Error (CleaningError (NothingToClean _)) ->
-                () // Expected
+                ()
             | Error e ->
-                failwithf $"Unexpected error type: {e}"
+                failwithf $"Unexpected error type: {DomainError.toMessage e}"
         )
     
     [<Fact>]
@@ -374,8 +347,8 @@ module TVShowTests =
         
         match result with
         | Error (ValidationError (PathNotFound _)) ->
-            () // Expected
+            ()
         | Error e ->
-            failwithf $"Unexpected error type: {e}"
+            failwithf $"Unexpected error type: {DomainError.toMessage e}"
         | Ok _ ->
             failwith "Should return error for invalid path"

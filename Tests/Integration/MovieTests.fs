@@ -1,4 +1,4 @@
-namespace MediaDirectoryCleaner.Tests
+namespace MediaDirectoryCleaner.Tests.Integration
 
 open System.IO
 open Xunit
@@ -22,19 +22,16 @@ module MovieTests =
             | Ok items ->
                 let movieFolder = Path.Combine(testDir, "Classic Movie (1996)")
                 test <@ containsDirectory movieFolder items @>
-                
-                // Should be marked as Directory, not File
                 test <@ not (containsFile movieFolder items) @>
-            | Error _ ->
-                failwith "Should have found folder to delete"
+            | Error e ->
+                failwithf $"Expected Ok with items, got: {DomainError.toMessage e}"
         )
 
     [<Fact>]
     let ``Small movie folder under 100MB threshold is deleted``() =
         let structure = [
-            ("Tiny Movie/poster.jpg", Some 50000000L)  // 50 MB
-            ("Tiny Movie/fanart.jpg", Some 30000000L)  // 30 MB  
-            // Total: 80 MB, no video
+            ("Tiny Movie/poster.jpg", Some 50000000L)
+            ("Tiny Movie/fanart.jpg", Some 30000000L)
         ]
         
         withTestDir structure (fun testDir ->
@@ -44,14 +41,14 @@ module MovieTests =
             | Ok items ->
                 let movieFolder = Path.Combine(testDir, "Tiny Movie")
                 test <@ containsDirectory movieFolder items @>
-            | Error _ ->
-                failwith "Should delete folder under threshold"
+            | Error e ->
+                failwithf $"Expected Ok with items, got: {DomainError.toMessage e}"
         )
 
     [<Fact>]
     let ``Extrafanart folder is not evaluated separately``() =
         let structure = [
-            ("Movie/movie.mp4", Some 50000000L) // 500 MB
+            ("Movie/movie.mp4", Some 50000000L)
             ("Movie/extrafanart/fanart1.jpg", Some 343521L)
             ("Movie/extrafanart/fanart2.jpg", Some 450000L)
         ]
@@ -61,12 +58,11 @@ module MovieTests =
             
             match result with
             | Ok items ->
-                // extrafanart should not appear in results
                 test <@ not (containsPathSubstring "extrafanart" items) @>
             | Error (CleaningError (NothingToClean _)) ->
-                () // Expected
+                ()
             | Error e ->
-                failwithf $"Unexpected error: {e}"
+                failwithf $"Unexpected error: {DomainError.toMessage e}"
         )
 
     // ============================================================================
@@ -82,10 +78,8 @@ module MovieTests =
             | Ok items ->
                 let movieFolder = Path.Combine(testDir, "Adventure (2024)")
                 
-                // Folder should NOT be deleted (has video)
                 test <@ not (containsDirectory movieFolder items) @>
             
-                // Should delete non-English/French subtitles (as Files)
                 let araSub = Path.Combine(testDir, "Adventure (2024)", "ara.srt")
                 let spaSub = Path.Combine(testDir, "Adventure (2024)", "spa.srt")
                 let gerSub = Path.Combine(testDir, "Adventure (2024)", "ger.srt")
@@ -96,32 +90,25 @@ module MovieTests =
                 test <@ containsFile gerSub items @>
                 test <@ containsFile porSub items @>
             
-                // Should NOT delete English subtitles
                 test <@ not (containsPathSubstring "English.srt" items) @>
                 test <@ not (containsPathSubstring "SDH.eng.HI.srt" items) @>
-            
-                // Should NOT delete French subtitles
                 test <@ not (containsPathSubstring "fre.srt" items) @>
                 test <@ not (containsPathSubstring "SDH.fre.srt" items) @>
                 
-                // Verify item types
                 let files, dirs = countItems items
-                test <@ files = 4 @>  // Only subtitle files
-                test <@ dirs = 0 @>   // No directories
+                test <@ files = 4 @>
+                test <@ dirs = 0 @>
             | Error (CleaningError (NothingToClean _)) ->
                 failwith "Should have found subtitles to delete"
             | Error e ->
-                failwithf $"Unexpected error: {e}"
+                failwithf $"Unexpected error: {DomainError.toMessage e}"
         )
 
     [<Fact>]
     let ``Subtitle matching video filename is kept even with language codes in name``() =
         let structure = [
-            // Video with "spanish" in title (Spanish word)
             ("Movie/The.Spanish.Prisoner.1997.1080p.mp4", Some 50000000L)
-            // Matching subtitle - should KEEP
             ("Movie/The.Spanish.Prisoner.1997.1080p.srt", Some 50000L)
-            // Non-matching language subs - should DELETE
             ("Movie/ara.srt", Some 45000L)
             ("Movie/ger.srt", Some 48000L)
         ]
@@ -131,25 +118,21 @@ module MovieTests =
             
             match result with
             | Ok items ->
-                // Matching subtitle NOT deleted
                 test <@ not (containsPathSubstring "The.Spanish.Prisoner.1997.1080p.srt" items) @>
                 
-                // Non-matching subs deleted
                 let araSub = Path.Combine(testDir, "Movie", "ara.srt")
                 let gerSub = Path.Combine(testDir, "Movie", "ger.srt")
                 test <@ containsFile araSub items @>
                 test <@ containsFile gerSub items @>
-            | Error _ ->
-                failwith "Should have found language subtitles to delete"
+            | Error e ->
+                failwithf $"Expected Ok with items, got: {DomainError.toMessage e}"
         )
 
     [<Fact>]
     let ``Subtitle in subdirectory matching video name is kept``() =
         let structure = [
             ("Movie/Movie.2020.1080p.mp4", Some 1000000000L)
-            // Matching subtitle in Subs folder
             ("Movie/Subs/Movie.2020.1080p.srt", Some 50000L)
-            // Non-matching subtitle
             ("Movie/Subs/spa.srt", Some 45000L)
         ]
         
@@ -158,14 +141,12 @@ module MovieTests =
             
             match result with
             | Ok items ->
-                // Matching subtitle NOT deleted (even in subdirectory)
                 test <@ not (containsPathSubstring "Movie.2020.1080p.srt" items) @>
                 
-                // Non-matching subtitle deleted
                 let spaSub = Path.Combine(testDir, "Movie", "Subs", "spa.srt")
                 test <@ containsFile spaSub items @>
-            | Error _ ->
-                failwith "Should have found language subtitle to delete"
+            | Error e ->
+                failwithf $"Expected Ok with items, got: {DomainError.toMessage e}"
         )
 
     // ============================================================================
@@ -175,13 +156,11 @@ module MovieTests =
     [<Fact>]
     let ``Multiple small folders and unwanted subtitles in large folders``() =
         let structure = [
-            // Small folder - should delete
             ("Small Movie/poster.jpg", Some 50000L)
-            // Large folder with video and subtitles
-            ("Big Movie/movie.mp4", Some 1000000000L) // 1 GB
-            ("Big Movie/eng.srt", Some 50000L)  // Keep
-            ("Big Movie/spa.srt", Some 48000L)  // Delete
-            ("Big Movie/ger.srt", Some 47000L)  // Delete
+            ("Big Movie/movie.mp4", Some 1000000000L)
+            ("Big Movie/eng.srt", Some 50000L)
+            ("Big Movie/spa.srt", Some 48000L)
+            ("Big Movie/ger.srt", Some 47000L)
         ]
         
         withTestDir structure (fun testDir ->
@@ -189,28 +168,24 @@ module MovieTests =
             
             match result with
             | Ok items ->
-                // Small folder deleted as Directory
                 let smallFolder = Path.Combine(testDir, "Small Movie")
                 test <@ containsDirectory smallFolder items @>
                 
-                // Large folder NOT deleted
                 let bigFolder = Path.Combine(testDir, "Big Movie")
                 test <@ not (containsDirectory bigFolder items) @>
                 
-                // Subtitle files deleted
                 let spaSub = Path.Combine(testDir, "Big Movie", "spa.srt")
                 let gerSub = Path.Combine(testDir, "Big Movie", "ger.srt")
                 test <@ containsFile spaSub items @>
                 test <@ containsFile gerSub items @>
                 
-                // English subtitle NOT deleted
                 test <@ not (containsPathSubstring "eng.srt" items) @>
                 
                 let files, dirs = countItems items
-                test <@ files = 2 @>  // 2 subtitle files
-                test <@ dirs = 1 @>   // 1 small directory
-            | Error _ ->
-                failwith "Should have found items to delete"
+                test <@ files = 2 @>
+                test <@ dirs = 1 @>
+            | Error e ->
+                failwithf $"Expected Ok with items, got: {DomainError.toMessage e}"
         )
 
     // ============================================================================
@@ -227,7 +202,6 @@ module MovieTests =
         withTestDir structure (fun testDir ->
             let movieFolder = Path.Combine(testDir, "DeleteMe")
             
-            // Verify folder exists before
             test <@ Directory.Exists(movieFolder) @>
             
             let result = Movies.clean testDir Domain.Execute
@@ -235,11 +209,9 @@ module MovieTests =
             match result with
             | Ok items ->
                 test <@ containsDirectory movieFolder items @>
-                
-                // Verify folder was actually deleted
                 test <@ not (Directory.Exists(movieFolder)) @>
             | Error e ->
-                failwithf $"Unexpected error: {e}"
+                failwithf $"Unexpected error: {DomainError.toMessage e}"
         )
 
     // ============================================================================
@@ -249,7 +221,7 @@ module MovieTests =
     [<Fact>]
     let ``No items to clean returns appropriate error``() =
         let structure = [
-            ("Good Movie/movie.mp4", Some 1000000000L) // 1 GB
+            ("Good Movie/movie.mp4", Some 1000000000L)
             ("Good Movie/eng.srt", Some 50000L)
             ("Good Movie/fre.srt", Some 48000L)
         ]
@@ -261,9 +233,9 @@ module MovieTests =
             | Ok _ ->
                 failwith "Should return error when nothing to clean"
             | Error (CleaningError (NothingToClean _)) ->
-                () // Expected
+                ()
             | Error e ->
-                failwithf $"Unexpected error type: {e}"
+                failwithf $"Unexpected error type: {DomainError.toMessage e}"
         )
 
     [<Fact>]
@@ -272,8 +244,8 @@ module MovieTests =
         
         match result with
         | Error (ValidationError (PathNotFound _)) ->
-            () // Expected
+            ()
         | Error e ->
-            failwithf $"Unexpected error type: {e}"
+            failwithf $"Unexpected error type: {DomainError.toMessage e}"
         | Ok _ ->
             failwith "Should return error for invalid path"

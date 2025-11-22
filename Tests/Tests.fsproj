@@ -8,14 +8,22 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<Compile Include="TestHelpers.fs" />
-		<Compile Include="DomainTests.fs" />
-		<Compile Include="SubtitleTests.fs" />
-		<Compile Include="SubtitlePropertyTests.fs" />
-		<Compile Include="ArguTests.fs" />
-		<Compile Include="MovieTests.fs" />
-		<Compile Include="TVShowTests.fs" />
-		<Compile Include="MusicTests.fs" />
+		<!-- Shared Helpers -->
+		
+		<!-- Unit Tests -->
+		<Compile Include="Unit\ErrorTests.fs" />
+		<Compile Include="Unit\DomainTypeTests.fs" />
+		<Compile Include="Unit\DomainPropertyTests.fs" />
+		<Compile Include="Unit\SubtitleTests.fs" />
+		<Compile Include="Unit\SubtitlePropertyTests.fs" />
+		<Compile Include="Unit\ArguTests.fs" />
+		<Compile Include="Integration\TestHelpers.fs" />
+		
+		<!-- Integration Tests -->
+		<Compile Include="Integration\FileSystemTests.fs" />
+		<Compile Include="Integration\MovieTests.fs" />
+		<Compile Include="Integration\TVShowTests.fs" />
+		<Compile Include="Integration\MusicTests.fs" />
 	</ItemGroup>
 
 	<ItemGroup>
