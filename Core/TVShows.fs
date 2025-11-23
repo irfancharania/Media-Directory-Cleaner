@@ -87,6 +87,24 @@ let private extractDeletableItems (classifications: DirectoryClassification list
     List.append orphans emptyDirs |> List.sortBy DeletableItem.path
 
 // ============================================================================
+// Show Folder Detection (Pure)
+// ============================================================================
+
+/// Check if directory contains a tvshow.nfo file (indicator of show root)
+let private hasTvShowNfo (path: string) : bool =
+    try
+        File.Exists(Path.Combine(path, "tvshow.nfo"))
+    with
+    | _ -> false
+
+/// Separate leaf directories into season folders and show folders (without seasons)
+let private separateShowFolders (leafDirs: seq<string>) : string list * string list =
+    let leafList = leafDirs |> Seq.toList
+    let showFolders = leafList |> List.filter hasTvShowNfo
+    let seasonFolders = leafList |> List.filter (hasTvShowNfo >> not)
+    (seasonFolders, showFolders)
+
+// ============================================================================
 // File Gathering (Infrastructure)
 // ============================================================================
 
@@ -104,6 +122,18 @@ let private gatherDirectoryFiles (dir: string) : string * ExistingFile list =
         | _ -> []
     
     (dir, List.append currentFiles subDirFiles)
+
+// ============================================================================
+// Reporting (Side Effects at Edge)
+// ============================================================================
+
+/// Log TV show folders without seasons in preview mode
+let private reportShowFoldersWithoutSeasons (showFolders: string list) : unit =
+    if not (List.isEmpty showFolders) then
+        Progress.info ""
+        Progress.info "=== TV SHOW FOLDERS WITHOUT SEASONS (Review Manually) ==="
+        showFolders |> List.iter (fun path -> 
+            Progress.info $"  [NO SEASONS] {path}")
 
 // ============================================================================
 // Pipeline Helpers
@@ -143,7 +173,16 @@ let clean (path: string) (previewMode: PreviewMode) : Result<seq<DeletableItem>,
         FileSystem.validatePath path |> Result.liftValidationError)
     |> Result.bind (Progress.wrap "Scanning directories" (getAllSubdirectories >> Result.liftDirectoryError))
     |> Result.bind (Progress.wrap "Finding leaf nodes" (filterToLeafNodes >> Result.liftDirectoryError))
-    |> Result.map (Progress.wrapMap "Gathering files" (Seq.map gatherDirectoryFiles >> Seq.toList))
+    |> Result.map (fun leafDirs ->
+        let seasonFolders, showFolders = 
+            Progress.run "Separating show folders" (fun () -> separateShowFolders leafDirs)
+        
+        // Report show folders without seasons in preview mode
+        if not isExecute then
+            reportShowFoldersWithoutSeasons showFolders
+        
+        seasonFolders)
+    |> Result.map (Progress.wrapMap "Gathering files" (List.map gatherDirectoryFiles))
     |> Result.map (Progress.wrapMap "Analyzing directories" (List.map classifyDirectory >> extractDeletableItems))
     |> Result.bind (fun items ->
         if List.isEmpty items then
