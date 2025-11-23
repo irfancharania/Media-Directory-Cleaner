@@ -50,9 +50,14 @@ let private findOrphanedFiles (mainFiles: ExistingFile list) (extraFiles: Existi
         
         extraFiles
         |> List.filter (fun extraFile ->
-            match extraFile with
-            | FolderImage _ -> false
-            | _ ->
+            // Always keep folder images when video files are present
+            let isFolderImage = 
+                let name = extraFile.Name.ToLowerInvariant()
+                name.StartsWith("folder") || name.StartsWith("poster")
+            
+            if isFolderImage then
+                false  // Keep folder images
+            else
                 let normalizedName = normalizeFileName extraFile.Name
                 mainFileNames |> Set.exists (fun mainName -> mainName.Contains(normalizedName)) |> not)
         |> List.map (fun f -> DeletableItem.fromFile f.FullPath)
@@ -134,6 +139,7 @@ let private reportShowFoldersWithoutSeasons (showFolders: string list) : unit =
         Progress.info "=== TV SHOW FOLDERS WITHOUT SEASONS (Review Manually) ==="
         showFolders |> List.iter (fun path -> 
             Progress.info $"  [NO SEASONS] {path}")
+        Progress.info ""
 
 // ============================================================================
 // Pipeline Helpers

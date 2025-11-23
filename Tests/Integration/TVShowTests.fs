@@ -192,32 +192,33 @@ module TVShowTests =
         )
 
     // ============================================================================
-    // Special Directories Tests
+    // Folder Image Preservation
     // ============================================================================
 
     [<Fact>]
-    let ``actors folder files are not processed separately``() =
+    let ``Folder images are kept when video files present``() =
         let structure = [
-            ("Show/poster.jpg", Some 63078L)
-            ("Show/.actors/hero.jpg", Some 29347L)
-            ("Show/.actors/villain.jpg", Some 33759L)
-            ("Show/Season 01/Show.S01E01.mkv", Some 664624081L)
+            ("Show/Season 01/Episode.mp4", Some 600000000L)
+            ("Show/Season 01/folder.jpg", Some 50000L)
+            ("Show/Season 01/poster.png", Some 60000L)
         ]
-    
+        
         withTestDir structure (fun testDir ->
             let result = TVShows.clean testDir Domain.Preview
-        
+            
             match result with
             | Ok items ->
-                test <@ not (containsPathSubstring ".actors" items) @>
+                // Folder images should NOT be deleted
+                test <@ not (containsPathSubstring "folder.jpg" items) @>
+                test <@ not (containsPathSubstring "poster.png" items) @>
             | Error (CleaningError (NothingToClean _)) ->
-                ()
+                ()  // Expected - no orphans
             | Error e ->
                 failwithf $"Unexpected error: {DomainError.toMessage e}"
         )
-    
+
     [<Fact>]
-    let ``Folder images are kept even without video``() =
+    let ``Folder images deleted when no video files present``() =
         let structure = [
             ("Show/Season 01/folder.jpg", Some 50000L)
             ("Show/Season 01/poster.jpg", Some 60000L)
@@ -228,6 +229,7 @@ module TVShowTests =
             
             match result with
             | Ok items ->
+                // Entire season folder deleted (no video files)
                 let season = Path.Combine(testDir, "Show", "Season 01")
                 test <@ containsDirectory season items @>
             | Error e ->

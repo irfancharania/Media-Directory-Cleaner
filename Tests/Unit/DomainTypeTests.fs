@@ -116,21 +116,6 @@ module DomainTypeTests =
         test <@ ExistingFile.classifyMediaType file = Audio @>
 
     [<Fact>]
-    let ``classifies jpg as Image``() =
-        let file = { FullPath = "poster.jpg"; Name = "poster.jpg"; Extension = ".jpg"; SizeInBytes = 1000L<byte> }
-        test <@ ExistingFile.classifyMediaType file = Image @>
-    
-    [<Fact>]
-    let ``classifies png as Image``() =
-        let file = { FullPath = "cover.png"; Name = "cover.png"; Extension = ".png"; SizeInBytes = 1000L<byte> }
-        test <@ ExistingFile.classifyMediaType file = Image @>
-
-    [<Fact>]
-    let ``classifies gif as Image``() =
-        let file = { FullPath = "anim.gif"; Name = "anim.gif"; Extension = ".gif"; SizeInBytes = 1000L<byte> }
-        test <@ ExistingFile.classifyMediaType file = Image @>
-
-    [<Fact>]
     let ``classifies srt as Subtitle``() =
         let file = { FullPath = "subs.srt"; Name = "subs.srt"; Extension = ".srt"; SizeInBytes = 1000L<byte> }
         test <@ ExistingFile.classifyMediaType file = MediaType.Subtitle @>
@@ -153,6 +138,11 @@ module DomainTypeTests =
     [<Fact>]
     let ``classifies nfo as Other``() =
         let file = { FullPath = "info.nfo"; Name = "info.nfo"; Extension = ".nfo"; SizeInBytes = 1000L<byte> }
+        test <@ ExistingFile.classifyMediaType file = Other @>
+
+    [<Fact>]
+    let ``classifies jpg as Other``() =
+        let file = { FullPath = "poster.jpg"; Name = "poster.jpg"; Extension = ".jpg"; SizeInBytes = 1000L<byte> }
         test <@ ExistingFile.classifyMediaType file = Other @>
     
     [<Fact>]
@@ -249,41 +239,5 @@ module DomainTypeTests =
         test <@ matched @>
 
     // ============================================================================
-    // Active Pattern Tests - FolderImage
+    // Active Pattern Tests - AudioFile
     // ============================================================================
-
-    [<Fact>]
-    let ``FolderImage pattern matches folder.jpg``() =
-        let file = { FullPath = "folder.jpg"; Name = "folder.jpg"; Extension = ".jpg"; SizeInBytes = 1000L<byte> }
-        let matched = match file with | FolderImage _ -> true | _ -> false
-        test <@ matched @>
-
-    [<Fact>]
-    let ``FolderImage pattern matches poster.png``() =
-        let file = { FullPath = "poster.png"; Name = "poster.png"; Extension = ".png"; SizeInBytes = 1000L<byte> }
-        let matched = match file with | FolderImage _ -> true | _ -> false
-        test <@ matched @>
-    
-    [<Fact>]
-    let ``FolderImage pattern is case insensitive``() =
-        let file = { FullPath = "FOLDER.JPG"; Name = "FOLDER.JPG"; Extension = ".jpg"; SizeInBytes = 1000L<byte> }
-        let matched = match file with | FolderImage _ -> true | _ -> false
-        test <@ matched @>
-
-    [<Fact>]
-    let ``FolderImage pattern matches poster with suffix``() =
-        let file = { FullPath = "poster-large.jpg"; Name = "poster-large.jpg"; Extension = ".jpg"; SizeInBytes = 1000L<byte> }
-        let matched = match file with | FolderImage _ -> true | _ -> false
-        test <@ matched @>
-
-    [<Fact>]
-    let ``FolderImage pattern does not match fanart.jpg``() =
-        let file = { FullPath = "fanart.jpg"; Name = "fanart.jpg"; Extension = ".jpg"; SizeInBytes = 1000L<byte> }
-        let matched = match file with | FolderImage _ -> true | _ -> false
-        test <@ not matched @>
-
-    [<Fact>]
-    let ``FolderImage pattern does not match banner.jpg``() =
-        let file = { FullPath = "banner.jpg"; Name = "banner.jpg"; Extension = ".jpg"; SizeInBytes = 1000L<byte> }
-        let matched = match file with | FolderImage _ -> true | _ -> false
-        test <@ not matched @>

@@ -41,7 +41,6 @@ type ExistingDirectory =
 type MediaType =
     | Video
     | Audio
-    | Image
     | Subtitle
     | Other
 
@@ -94,7 +93,6 @@ module ExistingFile =
         | ".avi" | ".flv" | ".mkv" | ".mp4" | ".mpeg" | ".mpg" | ".wmv" | ".3gp" -> Video
         | ".mp3" | ".m4a" | ".flac" | ".wav" | ".wma" | ".aac" | ".aiff" 
         | ".m4b" | ".m4p" | ".ogg" -> Audio
-        | ".jpg" | ".jpeg" | ".png" | ".gif" | ".bmp" | ".tif" | ".tiff" -> Image
         | ".srt" | ".sub" | ".sbv" | ".ass" | ".ssa" | ".vtt" -> MediaType.Subtitle
         | _ -> Other
 
@@ -122,11 +120,3 @@ module FilePatterns =
         let isLargeEnough = ExistingFile.sizeInKB file > thresholdKB
         let isAudioExtension = ExistingFile.classifyMediaType file = Audio
         if isLargeEnough || isAudioExtension then Some file else None
-    
-    /// Check if file is a folder image (poster/folder.jpg)
-    let (|FolderImage|_|) (file: ExistingFile) =
-        let name = file.Name.ToLowerInvariant()
-        if name.StartsWith("folder") || name.StartsWith("poster") then
-            Some file
-        else
-            None

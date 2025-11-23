@@ -97,6 +97,7 @@ let private reportUncertainSubtitles (uncertainSubtitles: string list) : unit =
         Progress.info "=== UNCERTAIN SUBTITLES (Review Manually) ==="
         uncertainSubtitles |> List.iter (fun path -> 
             Progress.info $"  [UNCERTAIN] {path}")
+        Progress.info ""
 
 // ============================================================================
 // Pipeline Helpers

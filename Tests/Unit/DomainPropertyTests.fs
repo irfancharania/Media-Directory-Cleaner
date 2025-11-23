@@ -16,9 +16,8 @@ module DomainPropertyTests =
     
     let private videoExtensions = [| ".avi"; ".flv"; ".mkv"; ".mp4"; ".mpeg"; ".mpg"; ".wmv"; ".3gp" |]
     let private audioExtensions = [| ".mp3"; ".m4a"; ".flac"; ".wav"; ".wma"; ".aac"; ".aiff"; ".m4b"; ".m4p"; ".ogg" |]
-    let private imageExtensions = [| ".jpg"; ".jpeg"; ".png"; ".gif"; ".bmp"; ".tif"; ".tiff" |]
     let private subtitleExtensions = [| ".srt"; ".sub"; ".sbv"; ".ass"; ".ssa"; ".vtt" |]
-    let private unknownExtensions = [| ".txt"; ".nfo"; ".xml"; ".json"; ".doc"; ".pdf"; ".exe"; ".bin"; ".dat" |]
+    let private unknownExtensions = [| ".txt"; ".nfo"; ".xml"; ".json"; ".doc"; ".pdf"; ".exe"; ".bin"; ".dat"; ".jpg"; ".png"; ".gif" |]
     
     let private createFile ext = 
         { FullPath = $"test{ext}"
@@ -65,20 +64,17 @@ module DomainPropertyTests =
         Check.QuickThrowOnFailure prop
 
     // ============================================================================
-    // Property: All Image Extensions Classify as Image
+    // Property: Classification is Deterministic
     // ============================================================================
     
     [<Fact>]
-    let ``All image extensions classify as Image``() =
+    let ``Classification returns same result when called twice``() =
+        let allExtensions = Array.concat [videoExtensions; audioExtensions; subtitleExtensions]
         let prop (idx: Byte) =
-            let ext = imageExtensions.[int idx % imageExtensions.Length]
+            let ext = allExtensions.[int idx % allExtensions.Length]
             let file = createFile ext
-            ExistingFile.classifyMediaType file = Image
+            ExistingFile.classifyMediaType file = ExistingFile.classifyMediaType file
         Check.QuickThrowOnFailure prop
-
-    // ============================================================================
-    // Property: All Subtitle Extensions Classify as Subtitle
-    // ============================================================================
     
     [<Fact>]
     let ``All subtitle extensions classify as Subtitle``() =
@@ -86,19 +82,6 @@ module DomainPropertyTests =
             let ext = subtitleExtensions.[int idx % subtitleExtensions.Length]
             let file = createFile ext
             ExistingFile.classifyMediaType file = MediaType.Subtitle
-        Check.QuickThrowOnFailure prop
-
-    // ============================================================================
-    // Property: Classification is Deterministic
-    // ============================================================================
-    
-    [<Fact>]
-    let ``Classification returns same result when called twice``() =
-        let allExtensions = Array.concat [videoExtensions; audioExtensions; imageExtensions; subtitleExtensions]
-        let prop (idx: Byte) =
-            let ext = allExtensions.[int idx % allExtensions.Length]
-            let file = createFile ext
-            ExistingFile.classifyMediaType file = ExistingFile.classifyMediaType file
         Check.QuickThrowOnFailure prop
 
     // ============================================================================
@@ -175,7 +158,7 @@ module DomainPropertyTests =
 
     [<Fact>]
     let ``isSubtitleFile returns false for non-subtitle extensions``() =
-        let nonSubtitleExtensions = Array.concat [videoExtensions; audioExtensions; imageExtensions; unknownExtensions]
+        let nonSubtitleExtensions = Array.concat [videoExtensions; audioExtensions; unknownExtensions]
         let prop (idx: Byte) =
             let ext = nonSubtitleExtensions.[int idx % nonSubtitleExtensions.Length]
             let file = createFile ext
