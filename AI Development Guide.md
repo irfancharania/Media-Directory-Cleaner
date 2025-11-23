@@ -1,4 +1,4 @@
-F# Development Guide
+# F# Development Guide
 
 > This document provides context for AI assistants working on this F# project. It defines architectural principles, coding standards, and project-specific patterns.
 
@@ -31,7 +31,7 @@ Error handling follows Scott Wlaschin's Railway-Oriented Programming:
 ### 3. Functional Core, Imperative Shell
 - **Pure functions** - All domain logic, calculations, transformations
 - **I/O at boundaries** - File, database, HTTP operations in infrastructure layer, wrapped in Result
-- **Side effects at edges** - Logging, telemetry only at pipeline endpoints
+- **Side effects at edges** - Logging, progress reporting only at pipeline endpoints
 
 ### 4. Type-Driven Design
 - Make illegal states unrepresentable with constrained types
@@ -43,8 +43,8 @@ Error handling follows Scott Wlaschin's Railway-Oriented Programming:
 ## Technology Stack
 
 ### Core Libraries
-- **FsToolkit.ErrorHandling** - utility library to work with the Result type in F#
-- **Argu** - declarative CLI argument parser for F# console applications
+- **FsToolkit.ErrorHandling** - Utility library to work with the Result type in F#
+- **Argu** - Declarative CLI argument parser for F# console applications
 
 ### Testing
 - **Unquote** - F#-idiomatic assertions with quotations, provides step-by-step failure messages
@@ -55,8 +55,19 @@ Error handling follows Scott Wlaschin's Railway-Oriented Programming:
 ### DO ✅
 
 ** NuGet package/Library use **
-- Use built-in libraries where applicable (e.g. for email validation with System.Net.Mail.MailAddress)
 - Use standard libraries for functions where applicable (e.g. FsToolkit.ErrorHandling, Argu, etc)
+**Leverage .NET and F# Built-in Features**
+- Prefer built-in .NET libraries over third-party packages where applicable
+- Use `System.Net.Mail.MailAddress` for email validation, `System.IO` for file operations, etc.
+- Use F# language features like units of measure for type-safe numeric operations
+- Leverage discriminated unions, pattern matching, and computation expressions
+- Use standard F# collection functions (`List.map`, `Seq.filter`, etc.) over custom implementations
+
+**Units of Measure**
+- Use units of measure for domain-specific quantities (bytes, MB, kB)
+- Define conversions explicitly to prevent unit mismatch errors
+- Be aware of naming conflicts between units and .NET types (e.g., `byte` unit vs `System.Byte` type)
+- Use type aliases (e.g., `type Byte = System.Byte`) when conflicts arise
 
 **Type Design**
 - Use constrained types for domain primitives
@@ -79,6 +90,12 @@ Error handling follows Scott Wlaschin's Railway-Oriented Programming:
 - Handle all error cases explicitly
 - Never catch exceptions in domain logic
 - Isolate exception handling at I/O boundaries
+- Provide specific error information (e.g., which file failed to delete)
+
+**Progress and Output**
+- Use stderr for progress messages, stdout for results
+- Wrap operations with progress indication at pipeline edges
+- Keep progress reporting separate from business logic
 
 **Module Organization**
 - One module per file (except where it makes sense like Domain)
@@ -86,14 +103,16 @@ Error handling follows Scott Wlaschin's Railway-Oriented Programming:
 - Private helpers at top
 - Clear separation of concerns
 - Group related functionality (e.g., CLI types in CliArguments.fs)
+- Organize by layer: Errors, Domain, Infrastructure, Application
 
 **Testing**
 - Test pure functions without mocking
 - Use Unquote for clear, quotation-based assertions
 - Property-based tests (FsCheck) for business invariants
 - Integration tests for I/O boundaries
-- Mirror production structure in tests
+- Mirror production structure in tests (Unit/, Integration/)
 - Use test helpers for common fixtures
+- Provide specific error messages in test failures
 
 ### DON'T ❌
 
@@ -107,6 +126,7 @@ Error handling follows Scott Wlaschin's Railway-Oriented Programming:
 - Access mutable state in domain logic
 - **Perform I/O operations in domain layer** (use infrastructure layer)
 - Duplicate type definitions (use shared modules)
+- Reinvent functionality that exists in .NET BCL or F# core
 
 **Code Smells**
 - Deeply nested if-else or match expressions
@@ -120,6 +140,7 @@ Error handling follows Scott Wlaschin's Railway-Oriented Programming:
 - Use excessive mocking
 - Ignore property-based testing opportunities
 - Skip edge cases and boundary conditions
+- Use generic error matching (prefer specific error types)
 
 ## Code Patterns
 
@@ -146,6 +167,28 @@ let validatePath (path: string) : Result<ValidatedPath, ValidationError> =
         Ok (ValidatedPath.createUnchecked path)
     else
         Error (PathNotFound path)
+```
+
+### Units of Measure Pattern
+```fsharp
+// Size.fs - Define units and conversions
+[<Measure>] type byte
+[<Measure>] type kB
+[<Measure>] type MB
+
+let bytesPerKiloByte = 1024L<byte/kB>
+let kilobytesPerMegaByte = 1024L<kB/MB>
+
+let int64ToBytes (x: int64) : int64<byte> = x * 1L<byte>
+let bytesToMegaBytes (x: int64<byte>) : int64<MB> = 
+    x / bytesPerKiloByte / kilobytesPerMegaByte
+
+// Usage - type-safe thresholds
+let ThresholdSizeMB = 100L<MB>
+let ThresholdSizeKB = 500L<kB>
+
+// Handling naming conflicts with System.Byte
+type Byte = System.Byte  // Alias when needed in test files
 ```
 
 ### Smart Constructor Pattern
@@ -411,14 +454,6 @@ data
 |> List.groupBy (_.Category)
 |> List.map summarizeByCategory
 ```
-
-## .NET 10 / F# 10 Features
-
-### Use Appropriately
-- **String interpolation** - `$"Value: {x}"` instead of `sprintf`
-- **Collection expressions** - Unified syntax for lists, arrays, sequences
-- **Enhanced type inference** - Less verbose code
-- **Performance improvements** - Faster compilation and runtime
 
 ## Resources
 

@@ -22,7 +22,7 @@ To actually delete files, you must add the `--execute` flag.
 
 ### Examples
 
-```
+```bash
 # Preview what would be cleaned
 > DirectoryCleaner.exe movies --path "Z:\Movies"
 
@@ -61,11 +61,10 @@ There are 3 available modes:
 
 ### Optional
 
-| Argument | Short | Description |
-|----------|-------|-------------|
-| `--execute` | | Execute mode - actually delete items (default is preview only) |
-| `--help` | | Display help information |
-
+| Argument | Description |
+|----------|-------------|
+| `--execute` | Execute mode - actually delete items (default is preview only) |
+| `--help` | Display help information |
 
 ## Modes
 
@@ -85,6 +84,7 @@ Cleans movie directories by:
 ### tv
 Cleans TV show directories by:
 - Deleting orphaned files < **100 MB** without corresponding video files
+- Deleting empty season folders (no video files)
 
 ### music
 Cleans music directories by:
@@ -181,6 +181,27 @@ The tool creates the following files in the specified path directory:
 
 The `.lastrun` file contains a UTC timestamp in ISO 8601 format (e.g., `2025-01-15T18:30:00.0000000Z`) and is used to skip directories that haven't changed since the last run.
 
+## Output
+
+Progress messages are written to stderr, allowing you to redirect clean results to a file:
+
+
+Preview mode output:
+```
+Validating path... done
+Scanning directories... done
+Finding leaf nodes... done
+Finding small directories... done
+Classifying subtitles... done
+
+PREVIEW MODE - The following items would be deleted with --execute
+
+  [DIR]  Z:\Movies\Old Movie (2010)
+  [FILE] Z:\Movies\Good Movie\subtitle.spa.srt
+
+Total: 1 directories, 1 files
+```
+
 ## Notes
 
 > - **Dot-prefixed directories** (like `.actors`) and **extrafanart** folders are never evaluated for deletion - their fate is determined by their parent folder
@@ -206,7 +227,7 @@ Arabic (ara), Basque (baq), Catalan (cat), Czech (cze), Danish (dan), Dutch (dut
 
 ### Build Commands
 
-```
+```bash
 # Debug build
 dotnet build
 
@@ -217,8 +238,15 @@ dotnet build -c Release
 dotnet test
 
 # Run the application
-dotnet run --project src/DirectoryCleaner.fsproj -- --mode movies -p "C:\Movies"
+dotnet run --project src/DirectoryCleaner.fsproj -- movies -p "C:\Movies"
 ```
+
+## Project History
+
+This tool has evolved through several iterations:
+1. **Original**: AutoIT script (circa 2005)
+2. **F# 3 rewrite**: First F# implementation (2015)
+3. **F# 10 rewrite**: Current version with modern F# practices and comprehensive test coverage (2025)
 
 ## License
 
