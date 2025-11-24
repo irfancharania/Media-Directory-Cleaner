@@ -96,7 +96,7 @@ let private extractDeletableItems (classifications: DirectoryClassification list
 // ============================================================================
 
 /// Check if directory contains a tvshow.nfo file (indicator of show root)
-let private hasTvShowNfo (path: string) : bool =
+let private isShowRootFolder (path: string) : bool =
     try
         File.Exists(Path.Combine(path, "tvshow.nfo"))
     with
@@ -105,8 +105,8 @@ let private hasTvShowNfo (path: string) : bool =
 /// Separate leaf directories into season folders and show folders (without seasons)
 let private separateShowFolders (leafDirs: seq<string>) : string list * string list =
     let leafList = leafDirs |> Seq.toList
-    let showFolders = leafList |> List.filter hasTvShowNfo
-    let seasonFolders = leafList |> List.filter (hasTvShowNfo >> not)
+    let showFolders = leafList |> List.filter isShowRootFolder
+    let seasonFolders = leafList |> List.filter (isShowRootFolder >> not)
     (seasonFolders, showFolders)
 
 // ============================================================================
@@ -126,7 +126,9 @@ let private gatherDirectoryFiles (dir: string) : string * ExistingFile list =
         with
         | _ -> []
     
-    (dir, List.append currentFiles subDirFiles)
+    let allFiles = List.append currentFiles subDirFiles
+
+    (dir, allFiles)
 
 // ============================================================================
 // Reporting (Side Effects at Edge)
