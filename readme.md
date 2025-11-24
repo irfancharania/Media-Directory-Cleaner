@@ -41,9 +41,9 @@ For automated daily cleaning, create a scheduled task:
 DirectoryCleaner.exe movies --path "Z:\Movies" --execute
 ```
 
+The tool is built to run repeatedly. What doesn't get cleaned on the first run may get cleaned on a subsequent run as it incrementally works through deleting unwanted files.
+
 > **Tip:** Run in preview mode first to verify what will be deleted!
-
-
 
 ## Arguments
 
@@ -68,38 +68,16 @@ There are 3 available modes:
 
 ## Modes
 
-### movies
-Cleans movie directories by:
-- Deleting **leaf directories** < **100 MB** (orphaned metadata folders without video files)
-- Removing **unwanted subtitle files** (keeps English and French, removes all others)
-- Preserving `.actors`, `extrafanart` and other metadata for valid movies
-
-**Important:** The cleaner works **iteratively** on leaf directories only. After deleting small folders, previously nested directories may become new leaf nodes. Run multiple times until no more items are found.
-
-**Subtitle Management:**
-- **Keeps**: English (eng, en, english), French (fre, fra, fr, français), Canadian French (fr-ca, québec)
-- **Removes**: 40+ other languages (spa, ger, ara, hin, ita, por, etc.)
-- **Keeps**: If language is uncertain, file is kept
-
-### tv
-Cleans TV show directories by:
-- Deleting orphaned files < **100 MB** without corresponding video files
-- Deleting empty season folders (no video files)
-
-### music
-Cleans music directories by:
-- Deleting leaf directories < **500 KB** without audio files
-
-
-## Folder Structures
-
 ### Movies
 
 The main movie folder may contain set folders with subdirectories.
 
 Leaf-nodes sized below **100 MB** will be subject for deletion, as movie files are generally greater than this size. Any leftover directories will become leaf directories for the next run.
 
-**Non-English/French subtitles** in movie folders are also removed (regardless of folder size).
+**Subtitle Management:**
+- **Keeps**: English (eng, en, english), French (fre, fra, fr, franÃ§ais), Canadian French (fr-ca, quÃ©bec)
+- **Removes**: 40+ other languages (spa, ger, ara, hin, ita, por, etc.)
+- **Keeps**: If language is uncertain, file is kept
 
 #### Expected folder structure:
 
@@ -124,12 +102,11 @@ Movies
    |---- Old Movie (No Video)           (deleted - entire folder < 100MB)
 ```
 
-### TV Shows
+### TV
 
-All episode files for season/year are contained within the same folder.
-Delete all files sized below **100 MB** that do not have a corresponding large file, and are not named "folder" or "poster".
+All episode files for season/year are contained within the same folder. TV show files are expected to be in leaf nodes.
 
-TV show files are expected to be in leaf nodes.
+Deletes all files sized below **100 MB** that do not have a corresponding large file, and are not named "folder" or "poster". Empty season folders (no video files) are also deleted.
 
 #### Expected folder structure:
 
@@ -177,14 +154,11 @@ Music
 The tool creates the following files in the specified path directory:
 
 - **`cleanLog.log`** - Detailed log of all cleaning operations with timestamps
-- **`.lastrun`** - Tracks the last successful run date (UTC) for optimizing subtitle cleaning for movies
+- **`.lastrun`** (Movies only) - Tracks the last successful run date (UTC) for optimizing subtitle cleaning for movies
 
-The `.lastrun` file contains a UTC timestamp in ISO 8601 format (e.g., `2025-01-15T18:30:00.0000000Z`) and is used to skip directories that haven't changed since the last run.
+The `.lastrun` file contains a UTC timestamp in ISO 8601 format (e.g., `2025-01-15T18:30:00.0000000Z`) and is used to skip movie directories that haven't changed since the last run.
 
-## Output
-
-Progress messages are written to stderr, allowing you to redirect clean results to a file:
-
+## Sample Output
 
 Preview mode output:
 ```
@@ -209,16 +183,6 @@ Total: 1 directories, 1 files
 > - Preview mode is the default. Use `--execute` to actually delete
 > - When in doubt, files are kept (conservative approach)
 
-## Supported Subtitle Languages
-
-### Kept (English and French variants)
-- **English**: English, eng, en
-- **French**: French, français, fre, fra, fr
-- **Canadian French**: fr-ca, frc, québec, canadien
-
-### Removed (40+ other languages)
-Arabic (ara), Basque (baq), Catalan (cat), Czech (cze), Danish (dan), Dutch (dut), Finnish (fin), German (ger), Galician (glg), Greek (gre), Hindi (hin), Hungarian (hun), Italian (ita), Norwegian (nor), Polish (pol), Portuguese (por), Romanian (rum), Spanish (spa), Swedish (swe), Turkish (tur), Chinese (chi), Japanese (jpn), Korean (kor), Kannada (kan), Malayalam (mal), Tamil (tam), Telugu (tel), and many more...
-
 ## Building
 
 ### Prerequisites
@@ -238,7 +202,7 @@ dotnet build -c Release
 dotnet test
 
 # Run the application
-dotnet run --project src/DirectoryCleaner.fsproj -- movies -p "C:\Movies"
+dotnet run --project src/DirectoryCleaner.fsproj movies -p "Z:\Movies"
 ```
 
 ## Project History
