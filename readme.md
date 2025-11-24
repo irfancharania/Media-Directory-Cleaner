@@ -14,11 +14,26 @@ Unfortunately, when media is deleted from within the Kodi/XBMC interface, the lo
 DirectoryCleaner.exe <mode> --path "<path>" [--execute]
 ```
 
-### Important
+### Arguments
 
-**By default, the tool runs in PREVIEW mode** - it will only show what would be deleted without actually deleting anything. This is the safe way to verify what will happen.
+#### Mode:
+There are 3 available modes:
+* `tv`
+* `movies`
+* `music`
 
-To actually delete files, you must add the `--execute` flag.
+#### Required
+
+| Argument | Short | Description |
+|----------|-------|-------------|
+| `--path` | `-p` | Directory path to clean |
+
+#### Optional
+
+| Argument | Description |
+|----------|-------------|
+| `--execute` | Execute mode - actually delete items (default is preview only) |
+| `--help` | Display help information |
 
 ### Examples
 
@@ -35,7 +50,7 @@ To actually delete files, you must add the `--execute` flag.
 
 ### Scheduled Task
 
-For automated daily cleaning, create a scheduled task:
+This can be scheduled in Task Scheduler to run once a day:
 
 ```
 DirectoryCleaner.exe movies --path "Z:\Movies" --execute
@@ -43,28 +58,8 @@ DirectoryCleaner.exe movies --path "Z:\Movies" --execute
 
 The tool is built to run repeatedly. What doesn't get cleaned on the first run may get cleaned on a subsequent run as it incrementally works through deleting unwanted files.
 
-> **Tip:** Run in preview mode first to verify what will be deleted!
+> **Important:** Run in preview mode first to verify what will be deleted!
 
-## Arguments
-
-### Mode:
-There are 3 available modes:
-* `tv`
-* `movies`
-* `music`
-
-### Required
-
-| Argument | Short | Description |
-|----------|-------|-------------|
-| `--path` | `-p` | Directory path to clean |
-
-### Optional
-
-| Argument | Description |
-|----------|-------------|
-| `--execute` | Execute mode - actually delete items (default is preview only) |
-| `--help` | Display help information |
 
 ## Modes
 
@@ -151,12 +146,10 @@ Music
 
 ## Logging
 
-The tool creates the following files in the specified path directory:
+The tool creates the following files after every run:
 
-- **`cleanLog.log`** - Detailed log of all cleaning operations with timestamps
-- **`.lastrun`** (Movies only) - Tracks the last successful run date (UTC) for optimizing subtitle cleaning for movies
-
-The `.lastrun` file contains a UTC timestamp in ISO 8601 format (e.g., `2025-01-15T18:30:00.0000000Z`) and is used to skip movie directories that haven't changed since the last run.
+- **`cleanLog.log`** - Log of all deleted items
+- **`.lastrun`** (Movies only) - Tracks the last successful run date (UTC) for optimizing subtitle cleaning
 
 ## Sample Output
 
@@ -178,10 +171,10 @@ Total: 1 directories, 1 files
 
 ## Notes
 
-> - **Dot-prefixed directories** (like `.actors`) and **extrafanart** folders are never evaluated for deletion - their fate is determined by their parent folder
+> - **.actors** and **extrafanart** folders are never evaluated for deletion. Their fate is determined by their parent folder
 > - **Iterative cleaning**: The tool processes leaf directories only. Run multiple times to clean newly exposed leaf nodes after deletions
 > - Preview mode is the default. Use `--execute` to actually delete
-> - When in doubt, files are kept (conservative approach)
+> - When in doubt, files are kept untouched
 
 ## Building
 
