@@ -95,6 +95,12 @@ let private extractDeletableItems (classifications: DirectoryClassification list
 // Show Folder Detection (Pure)
 // ============================================================================
 
+/// Separated leaf directories by type
+type LeafDirectoryClassification = {
+    SeasonFolders: string list
+    ShowFoldersWithoutSeasons: string list
+}
+
 /// Check if directory contains a tvshow.nfo file (indicator of show root)
 let private isShowRootFolder (path: string) : bool =
     try
@@ -103,11 +109,12 @@ let private isShowRootFolder (path: string) : bool =
     | _ -> false
 
 /// Separate leaf directories into season folders and show folders (without seasons)
-let private separateShowFolders (leafDirs: seq<string>) : string list * string list =
+let private classifyLeafDirectories (leafDirs: seq<string>) : LeafDirectoryClassification =
     let leafList = leafDirs |> Seq.toList
     let showFolders = leafList |> List.filter isShowRootFolder
     let seasonFolders = leafList |> List.filter (isShowRootFolder >> not)
-    (seasonFolders, showFolders)
+    { SeasonFolders = seasonFolders
+      ShowFoldersWithoutSeasons = showFolders }
 
 // ============================================================================
 // File Gathering (Infrastructure)
@@ -182,14 +189,15 @@ let clean (path: string) (previewMode: PreviewMode) : Result<seq<DeletableItem>,
     |> Result.bind (Progress.wrap "Scanning directories" (getAllSubdirectories >> Result.liftDirectoryError))
     |> Result.bind (Progress.wrap "Finding leaf nodes" (filterToLeafNodes >> Result.liftDirectoryError))
     |> Result.map (fun leafDirs ->
-        let seasonFolders, showFolders = 
-            Progress.run "Separating show folders" (fun () -> separateShowFolders leafDirs)
+        let classified = 
+            Progress.run "Separating show folders" (fun () -> 
+                classifyLeafDirectories leafDirs)
         
         // Report show folders without seasons in preview mode
         if not isExecute then
-            reportShowFoldersWithoutSeasons showFolders
+            reportShowFoldersWithoutSeasons classified.ShowFoldersWithoutSeasons
         
-        seasonFolders)
+        classified.SeasonFolders)
     |> Result.map (Progress.wrapMap "Gathering files" (List.map gatherDirectoryFiles))
     |> Result.map (Progress.wrapMap "Analyzing directories" (List.map classifyDirectory >> extractDeletableItems))
     |> Result.bind (fun items ->
