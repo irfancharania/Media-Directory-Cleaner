@@ -2,7 +2,6 @@ module Domain
 
 open System.IO
 open Size
-open Errors
 
 // ============================================================================
 // Domain Types - Making illegal states unrepresentable
@@ -100,7 +99,7 @@ module ExistingFile =
         | ".avi" | ".flv" | ".mkv" | ".mp4" | ".mpeg" | ".mpg" | ".wmv" | ".3gp" -> Video
         | ".mp3" | ".m4a" | ".flac" | ".wav" | ".wma" | ".aac" | ".aiff" 
         | ".m4b" | ".m4p" | ".ogg" -> Audio
-        | ".srt" | ".sub" | ".sbv" | ".ass" | ".ssa" | ".vtt" -> MediaType.Subtitle
+        | ".srt" | ".sub" | ".sbv" | ".ass" | ".ssa" | ".vtt" -> Subtitle
         | _ -> Other
 
 module ExistingDirectory =

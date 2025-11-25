@@ -127,16 +127,14 @@ let isUncertain (filename: string) : bool =
 
 /// Check if file is a subtitle by extension
 let isSubtitleFile (file: ExistingFile) : bool =
-    match file.Extension with
-    | ".srt" | ".sub" | ".sbv" | ".ass" | ".ssa" | ".vtt" -> true
-    | _ -> false
+    ExistingFile.classifyMediaType file = Subtitle
 
 /// Check if subtitle filename matches a video file in the same directory
 let matchesVideoFile (subtitlePath: string) (dirFiles: seq<ExistingFile>) : bool =
     let subtitleBase = Path.GetFileNameWithoutExtension(subtitlePath).ToLowerInvariant()
     
     dirFiles
-    |> Seq.filter (fun f -> ExistingFile.classifyMediaType f = MediaType.Video)
+    |> Seq.filter (fun f -> ExistingFile.classifyMediaType f = Video)
     |> Seq.exists (fun videoFile ->
         let videoBase = Path.GetFileNameWithoutExtension(videoFile.Name).ToLowerInvariant()
         subtitleBase = videoBase)
