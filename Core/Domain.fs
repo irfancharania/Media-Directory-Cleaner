@@ -2,6 +2,7 @@ module Domain
 
 open System.IO
 open Size
+open Errors
 
 // ============================================================================
 // Domain Types - Making illegal states unrepresentable
@@ -61,6 +62,11 @@ type PreviewMode =
     | Preview
     | Execute
 
+/// Scan mode - whether to use optimization or scan all directories
+type ScanMode =
+    | Optimized
+    | ScanAll
+
 // ============================================================================
 // Smart Constructors
 // ============================================================================
@@ -99,7 +105,7 @@ module ExistingFile =
         | ".avi" | ".flv" | ".mkv" | ".mp4" | ".mpeg" | ".mpg" | ".wmv" | ".3gp" -> Video
         | ".mp3" | ".m4a" | ".flac" | ".wav" | ".wma" | ".aac" | ".aiff" 
         | ".m4b" | ".m4p" | ".ogg" -> Audio
-        | ".srt" | ".sub" | ".sbv" | ".ass" | ".ssa" | ".vtt" -> Subtitle
+        | ".srt" | ".sub" | ".sbv" | ".ass" | ".ssa" | ".vtt" -> MediaType.Subtitle
         | _ -> Other
 
 module ExistingDirectory =

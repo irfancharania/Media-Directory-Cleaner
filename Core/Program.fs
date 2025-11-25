@@ -27,11 +27,15 @@ let printItem item =
 // Application Logic
 // ============================================================================
 
-let runClean (cleanFn: string -> PreviewMode -> Result<seq<DeletableItem>, DomainError>) 
-             (path: string)
-             (previewMode: PreviewMode) =
+let runClean (mode: CleanMode) (path: string) (previewMode: PreviewMode) (scanMode: ScanMode) =
     
-    match cleanFn path previewMode with
+    let result = 
+        match mode with
+        | CleanMode.Tv -> TVShows.clean path previewMode
+        | CleanMode.Movies -> Movies.clean path previewMode scanMode
+        | CleanMode.Music -> Music.clean path previewMode
+    
+    match result with
     | Ok items ->
         // Blank line after progress output
         Progress.info ""
@@ -60,6 +64,7 @@ let runClean (cleanFn: string -> PreviewMode -> Result<seq<DeletableItem>, Domai
             Progress.error msg
             1
         | None -> 
+            printfn ""
             printfn "Nothing to clean."
             0
 
@@ -88,19 +93,19 @@ let main argv =
             let mode = results.GetResult(CliArguments.Mode)
             let path = results.GetResult(CliArguments.Path)
 
-            let cleanFn = 
-                match mode with
-                | CleanMode.Tv -> TVShows.clean
-                | CleanMode.Movies -> Movies.clean
-                | CleanMode.Music -> Music.clean
-
             let previewMode = 
                 if results.Contains(CliArguments.Execute) then 
                     Domain.Execute 
                 else 
                     Domain.Preview
+            
+            let scanMode =
+                if results.Contains(CliArguments.Scan_All) then
+                    Domain.ScanAll
+                else
+                    Domain.Optimized
                     
-            runClean cleanFn path previewMode
+            runClean mode path previewMode scanMode
         with
         | :? ArguParseException as ex ->
             Progress.error ex.Message

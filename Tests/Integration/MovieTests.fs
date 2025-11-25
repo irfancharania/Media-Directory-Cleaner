@@ -16,7 +16,7 @@ module MovieTests =
     [<Fact>]
     let ``Movie without video file - entire folder should be deleted``() =
         withTestDir (movieWithoutVideo "Classic Movie (1996)") (fun testDir ->
-            let result = Movies.clean testDir Domain.Preview
+            let result = Movies.clean testDir Domain.Preview Domain.Optimized
         
             match result with
             | Ok items ->
@@ -35,7 +35,7 @@ module MovieTests =
         ]
         
         withTestDir structure (fun testDir ->
-            let result = Movies.clean testDir Domain.Preview
+            let result = Movies.clean testDir Domain.Preview Domain.Optimized
             
             match result with
             | Ok items ->
@@ -54,7 +54,7 @@ module MovieTests =
         ]
         
         withTestDir structure (fun testDir ->
-            let result = Movies.clean testDir Domain.Preview
+            let result = Movies.clean testDir Domain.Preview Domain.Optimized
             
             match result with
             | Ok items ->
@@ -72,7 +72,7 @@ module MovieTests =
     [<Fact>]
     let ``Movie with video - keeps folder but deletes non-English-French subtitles``() =
         withTestDir (movieWithVideoAndSubtitles "Adventure (2024)" "Adventure.2024.1080p") (fun testDir ->
-            let result = Movies.clean testDir Domain.Preview
+            let result = Movies.clean testDir Domain.Preview Domain.Optimized
         
             match result with
             | Ok items ->
@@ -114,7 +114,7 @@ module MovieTests =
         ]
         
         withTestDir structure (fun testDir ->
-            let result = Movies.clean testDir Domain.Preview
+            let result = Movies.clean testDir Domain.Preview Domain.Optimized
             
             match result with
             | Ok items ->
@@ -137,7 +137,7 @@ module MovieTests =
         ]
         
         withTestDir structure (fun testDir ->
-            let result = Movies.clean testDir Domain.Preview
+            let result = Movies.clean testDir Domain.Preview Domain.Optimized
             
             match result with
             | Ok items ->
@@ -147,6 +147,70 @@ module MovieTests =
                 test <@ containsFile spaSub items @>
             | Error e ->
                 failwithf $"Expected Ok with items, got: {DomainError.toMessage e}"
+        )
+
+    // ============================================================================
+    // Scan All Mode Tests
+    // ============================================================================
+
+    [<Fact>]
+    let ``Scan all mode bypasses optimization``() =
+        let structure = [
+            ("Movie/movie.mp4", Some 1000000000L)
+            ("Movie/spa.srt", Some 45000L)
+        ]
+        
+        withTestDir structure (fun testDir ->
+            // First run with optimization - creates .lastrun
+            let _ = Movies.clean testDir Domain.Execute Domain.Optimized
+            
+            // Second run with optimization - should skip (no changes)
+            let resultOptimized = Movies.clean testDir Domain.Preview Domain.Optimized
+            
+            match resultOptimized with
+            | Error (CleaningError (NothingToClean _)) ->
+                ()  // Expected - optimization skips unchanged directories
+            | Ok _ ->
+                failwith "Optimized mode should skip unchanged directories"
+            | Error e ->
+                failwithf $"Unexpected error: {DomainError.toMessage e}"
+            
+            // Run with ScanAll - should find the subtitle again
+            let resultScanAll = Movies.clean testDir Domain.Preview Domain.ScanAll
+            
+            match resultScanAll with
+            | Ok items ->
+                let spaSub = Path.Combine(testDir, "Movie", "spa.srt")
+                test <@ containsFile spaSub items @>
+            | Error e ->
+                failwithf $"ScanAll mode should bypass optimization, got: {DomainError.toMessage e}"
+        )
+
+    [<Fact>]
+    let ``Scan all mode shows uncertain subtitles again``() =
+        let structure = [
+            ("Movie/movie.mp4", Some 1000000000L)
+            ("Movie/subtitle.srt", Some 45000L)  // Uncertain - no language code
+        ]
+        
+        withTestDir structure (fun testDir ->
+            // First run
+            let _ = Movies.clean testDir Domain.Preview Domain.Optimized
+            
+            // Second run with optimization - skips unchanged
+            let resultOptimized = Movies.clean testDir Domain.Preview Domain.Optimized
+            match resultOptimized with
+            | Error (CleaningError (NothingToClean _)) -> ()
+            | _ -> ()
+            
+            // ScanAll should process everything again
+            let resultScanAll = Movies.clean testDir Domain.Preview Domain.ScanAll
+            
+            // Should not error (uncertain subtitle doesn't get deleted)
+            match resultScanAll with
+            | Ok _ -> ()  // No items to delete, but processed
+            | Error (CleaningError (NothingToClean _)) -> ()  // Also valid
+            | Error e -> failwithf $"Unexpected error: {DomainError.toMessage e}"
         )
 
     // ============================================================================
@@ -164,7 +228,7 @@ module MovieTests =
         ]
         
         withTestDir structure (fun testDir ->
-            let result = Movies.clean testDir Domain.Preview
+            let result = Movies.clean testDir Domain.Preview Domain.Optimized
             
             match result with
             | Ok items ->
@@ -204,7 +268,7 @@ module MovieTests =
             
             test <@ Directory.Exists(movieFolder) @>
             
-            let result = Movies.clean testDir Domain.Execute
+            let result = Movies.clean testDir Domain.Execute Domain.Optimized
             
             match result with
             | Ok items ->
@@ -227,7 +291,7 @@ module MovieTests =
         ]
         
         withTestDir structure (fun testDir ->
-            let result = Movies.clean testDir Domain.Preview
+            let result = Movies.clean testDir Domain.Preview Domain.Optimized
             
             match result with
             | Ok _ ->
@@ -240,7 +304,7 @@ module MovieTests =
 
     [<Fact>]
     let ``Invalid path returns validation error``() =
-        let result = Movies.clean "V:\\NonExistent\\Path\\12345" Domain.Preview
+        let result = Movies.clean "V:\\NonExistent\\Path\\12345" Domain.Preview Domain.Optimized
         
         match result with
         | Error (ValidationError (PathNotFound _)) ->

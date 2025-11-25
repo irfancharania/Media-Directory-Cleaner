@@ -173,11 +173,14 @@ let private executeDelete (logFilePath: string) (items: DeletableItem list) : Re
 // ============================================================================
 
 /// Clean movie directories - delete small folders and unwanted subtitles
-let clean (path: string) (previewMode: PreviewMode) : Result<seq<DeletableItem>, DomainError> =
+let clean (path: string) (previewMode: PreviewMode) (scanMode: ScanMode) : Result<seq<DeletableItem>, DomainError> =
     
     let logFilePath = Path.Combine(path, logFileName)
     let isExecute = (previewMode = Execute)
-    let lastRunDate = LastRun.tryGetLastRunDate path
+    let lastRunDate = 
+        match scanMode with
+        | ScanAll -> None  // Bypass optimization
+        | Optimized -> LastRun.tryGetLastRunDate path
     
     // Phase 1: Validate path
     Progress.runResult "Validating path" (fun () -> 
@@ -192,9 +195,16 @@ let clean (path: string) (previewMode: PreviewMode) : Result<seq<DeletableItem>,
     // Phase 4: Filter to changed directories (optimization)
     |> Result.map (fun allDirs ->
         let allDirsList = allDirs |> Seq.toList
-        let dirsToCheck = LastRun.filterChangedDirectories lastRunDate allDirsList |> Seq.toList
-        let stats = OptimizationStats.create (List.length allDirsList) (List.length dirsToCheck)
-        reportOptimizationStats stats
+        let dirsToCheck = 
+            match scanMode with
+            | ScanAll -> 
+                Progress.info "  Scan all mode: Checking all directories (optimization disabled)"
+                allDirsList
+            | Optimized ->
+                let filtered = LastRun.filterChangedDirectories lastRunDate allDirsList |> Seq.toList
+                let stats = OptimizationStats.create (List.length allDirsList) (List.length filtered)
+                reportOptimizationStats stats
+                filtered
         dirsToCheck)
     
     // Phase 5: Find small directories AND classify subtitles in ALL changed directories

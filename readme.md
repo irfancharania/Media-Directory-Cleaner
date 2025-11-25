@@ -11,7 +11,7 @@ Unfortunately, when media is deleted from within the Kodi/XBMC interface, the lo
 ## Usage
 
 ```
-DirectoryCleaner.exe <mode> --path "<path>" [--execute]
+DirectoryCleaner.exe <mode> --path "<path>" [--execute] [--scan-all]
 ```
 
 ### Arguments
@@ -30,10 +30,11 @@ There are 3 available modes:
 
 #### Optional
 
-| Argument | Description |
-|----------|-------------|
-| `--execute` | Execute mode - actually delete items (default is preview only) |
-| `--help` | Display help information |
+| Argument | Short | Description |
+|----------|-------|-------------|
+| `--execute` | | Execute mode - actually delete items (default is preview only) |
+| `--scan-all` | `-a` | Bypass optimization and scan all directories (movies mode only) |
+| `--help` | | Display help information |
 
 ### Examples
 
@@ -46,6 +47,9 @@ There are 3 available modes:
 
 # Actually execute the cleaning
 > DirectoryCleaner.exe movies -p "Z:\Movies" --execute
+
+# Scan all directories (bypass optimization to see uncertain subtitles)
+> DirectoryCleaner.exe movies -p "Z:\Movies" --scan-all
 ```
 
 ### Scheduled Task
@@ -175,6 +179,7 @@ Total: 1 directories, 1 files
 > - **Iterative cleaning**: The tool processes leaf directories only. Run multiple times to clean newly exposed leaf nodes after deletions
 > - Preview mode is the default. Use `--execute` to actually delete
 > - When in doubt, files are kept untouched
+> - Movies mode uses optimization by default. Use `--scan-all` to bypass and see all uncertain subtitles
 
 ## Building
 
@@ -203,7 +208,7 @@ dotnet run --project src/DirectoryCleaner.fsproj movies -p "Z:\Movies"
 This tool has evolved through several iterations:
 1. **Original**: AutoIT script (circa 2005)
 2. **F# 3 rewrite**: First F# implementation (2015)
-3. **F# 10 rewrite**: Current version with modern F# practices and comprehensive test coverage (2025)
+3. **F# 10 rewrite**: Enhanced version with modern F# practices and comprehensive test coverage (2025)
 
 ## License
 

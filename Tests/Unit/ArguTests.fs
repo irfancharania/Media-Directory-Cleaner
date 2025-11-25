@@ -40,7 +40,33 @@ module ArguTests =
         test <@ results.GetResult(CliArguments.Mode) = CleanMode.Music @>
         test <@ results.GetResult(CliArguments.Path) = "C:\\Music" @>
         test <@ results.Contains(CliArguments.Execute) @>
+ 
+    [<Fact>]
+    let ``parse movies mode with scan-all flag``() =
+        let args = [| "movies"; "-p"; "C:\\Movies"; "--scan-all" |]
+        let results = parser.ParseCommandLine(args)
+        
+        test <@ results.GetResult(CliArguments.Mode) = CleanMode.Movies @>
+        test <@ results.GetResult(CliArguments.Path) = "C:\\Movies" @>
+        test <@ results.Contains(CliArguments.Scan_All) @>
     
+    [<Fact>]
+    let ``parse movies mode with scan-all short flag``() =
+        let args = [| "movies"; "-p"; "C:\\Movies"; "-a" |]
+        let results = parser.ParseCommandLine(args)
+        
+        test <@ results.GetResult(CliArguments.Mode) = CleanMode.Movies @>
+        test <@ results.Contains(CliArguments.Scan_All) @>
+    
+    [<Fact>]
+    let ``parse with all flags combined``() =
+        let args = [| "movies"; "-p"; "C:\\Movies"; "--scan-all"; "--execute" |]
+        let results = parser.ParseCommandLine(args)
+        
+        test <@ results.GetResult(CliArguments.Mode) = CleanMode.Movies @>
+        test <@ results.Contains(CliArguments.Scan_All) @>
+        test <@ results.Contains(CliArguments.Execute) @>
+
     [<Fact>]
     let ``parse with path containing spaces``() =
         let args = [| "movies"; "-p"; "C:\\My Movies\\Collection" |]
@@ -189,7 +215,7 @@ module ArguTests =
         let args = [| "movies"; "-p"; "C:\\Movies"; "--unknown"; "value" |]
         
         raises<ArguParseException> <@ parser.ParseCommandLine(args, raiseOnUsage = true) @>
-    
+
     // ============================================================================
     // GetAllResults Integration
     // ============================================================================
