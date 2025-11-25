@@ -22,11 +22,11 @@ let private containsAudioFiles (files: ExistingFile list) : bool =
         | _ -> false)
 
 /// Filter to directories without audio files - pure function
-let private findDirectoriesWithoutAudio (dirsWithFiles: (string * ExistingFile list) list) 
+let private findDirectoriesWithoutAudio (dirsWithFiles: DirectoryWithFiles list) 
     : DeletableItem list =
     dirsWithFiles
-    |> List.filter (fun (_, files) -> not (containsAudioFiles files))
-    |> List.map (fun (dir, _) -> DeletableItem.fromDirectory dir)
+    |> List.filter (fun dwf -> not (containsAudioFiles dwf.Files))
+    |> List.map (fun dwf -> DeletableItem.fromDirectory dwf.Path)
     |> List.sortBy DeletableItem.path
 
 // ============================================================================
@@ -34,8 +34,9 @@ let private findDirectoriesWithoutAudio (dirsWithFiles: (string * ExistingFile l
 // ============================================================================
 
 /// Gather files for each directory
-let private gatherFilesForDirectory (dir: string) : string * ExistingFile list =
-    (dir, getFiles dir |> Seq.toList)
+let private gatherFilesForDirectory (dir: string) : DirectoryWithFiles =
+    { Path = dir
+      Files = getFiles dir |> Seq.toList }
 
 // ============================================================================
 // Pipeline Helpers

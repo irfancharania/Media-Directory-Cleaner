@@ -23,6 +23,7 @@
 		<Compile Include="Integration\FileSystemTests.fs" />
 		<Compile Include="Integration\MovieTests.fs" />
 		<Compile Include="Integration\TVShowTests.fs" />
+		<Compile Include="Integration\TVShowClassificationTests.fs" />
 		<Compile Include="Integration\MusicTests.fs" />
 	</ItemGroup>
 

@@ -11,6 +11,43 @@ open Utility
 let ThresholdSizeMB = 100L<MB>
 
 // ============================================================================
+// Domain Types for Movies
+// ============================================================================
+
+/// Represents context for a file within its directory
+/// Example: { File = file.spa.srt; DirectoryFiles = [file.mkv; file.eng.srt; file.spa.srt] }
+type FileWithContext = {
+    File: ExistingFile
+    DirectoryFiles: ExistingFile list
+}
+
+/// Classification results from subtitle analysis
+/// Example: { ToDelete = [file1.spa.srt; file2.ger.srt]; UncertainSubtitles = ["file3.unknown.srt"] }
+type SubtitleAnalysis = {
+    ToDelete: DeletableItem list
+    UncertainSubtitles: string list
+}
+
+/// Optimization statistics for reporting
+/// Example: { TotalDirectories = 150; CheckedDirectories = 45; SkippedDirectories = 105 }
+type OptimizationStats = {
+    TotalDirectories: int
+    CheckedDirectories: int
+    SkippedDirectories: int
+}
+
+module OptimizationStats =
+    let create (totalDirs: int) (checkedDirs: int) =
+        { TotalDirectories = totalDirs
+          CheckedDirectories = checkedDirs
+          SkippedDirectories = totalDirs - checkedDirs }
+    
+    /// Format statistics as a human-readable string
+    /// Example: "Optimization: Checking 45 of 150 directories (skipped 105 unchanged)"
+    let toString (stats: OptimizationStats) : string =
+        $"Optimization: Checking {stats.CheckedDirectories} of {stats.TotalDirectories} directories (skipped {stats.SkippedDirectories} unchanged)"
+
+// ============================================================================
 // Subtitle Classification (Pure)
 // ============================================================================
 
@@ -20,7 +57,10 @@ type SubtitleClassification =
     | ToKeep
 
 /// Classify a subtitle file based on language detection (pure function)
-let private classifySubtitle (file: ExistingFile) (dirFiles: ExistingFile list) : SubtitleClassification =
+let private classifySubtitle (fileWithContext: FileWithContext) : SubtitleClassification =
+    let file = fileWithContext.File
+    let dirFiles = fileWithContext.DirectoryFiles
+    
     if Subtitle.matchesVideoFile file.FullPath dirFiles then
         ToKeep
     elif Subtitle.shouldDelete file.Name then
@@ -31,20 +71,21 @@ let private classifySubtitle (file: ExistingFile) (dirFiles: ExistingFile list) 
         ToKeep
 
 /// Classify all subtitles from files with their directory context (pure function)
-let private classifySubtitles (filesWithContext: (ExistingFile * ExistingFile list) list) 
-    : DeletableItem list * string list =
+let private classifySubtitles (filesWithContext: FileWithContext list) : SubtitleAnalysis =
     let classifications =
         filesWithContext
-        |> List.filter (fun (f, _) -> Subtitle.isSubtitleFile f)
-        |> List.map (fun (f, dirFiles) -> classifySubtitle f dirFiles)
+        |> List.filter (fun fwc -> Subtitle.isSubtitleFile fwc.File)
+        |> List.map classifySubtitle
     
     let toDelete = 
         classifications 
         |> List.choose (function ToDelete path -> Some (DeletableItem.fromFile path) | _ -> None)
+    
     let uncertain = 
         classifications 
         |> List.choose (function Uncertain path -> Some path | _ -> None)
-    (toDelete, uncertain)
+    
+    { ToDelete = toDelete; UncertainSubtitles = uncertain }
 
 // ============================================================================
 // Directory Analysis (Pure)
@@ -62,7 +103,7 @@ let private filterSmallDirectories (getDirSize: string -> int64<MB>) (directorie
 // ============================================================================
 
 /// Gather all files with their directory context for subtitle classification
-let private gatherFilesWithContext (directories: string list) : (ExistingFile * ExistingFile list) list =
+let private gatherFilesWithContext (directories: string list) : FileWithContext list =
     directories
     |> List.collect (fun dir ->
         let dirFiles = getFiles dir |> Seq.toList
@@ -73,12 +114,16 @@ let private gatherFilesWithContext (directories: string list) : (ExistingFile * 
                 |> Seq.filter (shouldSkipDirectory >> not)
                 |> Seq.collect (fun subDir -> 
                     let subFiles = getFiles subDir.FullName |> Seq.toList
-                    subFiles |> List.map (fun f -> (f, subFiles)))
+                    subFiles |> List.map (fun f -> 
+                        { File = f; DirectoryFiles = subFiles }))
                 |> Seq.toList
             with
             | _ -> []
         
-        let currentDirPairs = dirFiles |> List.map (fun f -> (f, dirFiles))
+        let currentDirPairs = 
+            dirFiles |> List.map (fun f -> 
+                { File = f; DirectoryFiles = dirFiles })
+        
         List.append currentDirPairs subDirFiles)
 
 // ============================================================================
@@ -86,9 +131,9 @@ let private gatherFilesWithContext (directories: string list) : (ExistingFile * 
 // ============================================================================
 
 /// Log optimization statistics
-let private reportOptimizationStats (totalCount: int) (checkedCount: int) : unit =
-    if checkedCount < totalCount then
-        Progress.info $"  Optimization: Checking {checkedCount} of {totalCount} directories (skipped {totalCount - checkedCount} unchanged)"
+let private reportOptimizationStats (stats: OptimizationStats) : unit =
+    if stats.SkippedDirectories > 0 then
+        Progress.info $"  {OptimizationStats.toString stats}"
 
 /// Log uncertain subtitles in preview mode
 let private reportUncertainSubtitles (uncertainSubtitles: string list) : unit =
@@ -148,7 +193,8 @@ let clean (path: string) (previewMode: PreviewMode) : Result<seq<DeletableItem>,
     |> Result.map (fun allDirs ->
         let allDirsList = allDirs |> Seq.toList
         let dirsToCheck = LastRun.filterChangedDirectories lastRunDate allDirsList |> Seq.toList
-        reportOptimizationStats (List.length allDirsList) (List.length dirsToCheck)
+        let stats = OptimizationStats.create (List.length allDirsList) (List.length dirsToCheck)
+        reportOptimizationStats stats
         dirsToCheck)
     
     // Phase 5: Find small directories AND classify subtitles in ALL changed directories
@@ -163,16 +209,16 @@ let clean (path: string) (previewMode: PreviewMode) : Result<seq<DeletableItem>,
             Progress.run "Gathering subtitle info" (fun () -> 
                 gatherFilesWithContext dirsToCheck)
         
-        let subtitlesToDelete, uncertainSubtitles =
+        let analysis =
             Progress.run "Classifying subtitles" (fun () ->
                 classifySubtitles filesWithContext)
         
         // Report uncertain subtitles in preview mode
         if not isExecute then
-            reportUncertainSubtitles uncertainSubtitles
+            reportUncertainSubtitles analysis.UncertainSubtitles
         
         // Combine folders and subtitles
-        List.append foldersToDelete subtitlesToDelete
+        List.append foldersToDelete analysis.ToDelete
         |> List.distinctBy DeletableItem.path
         |> List.sortBy DeletableItem.path)
     

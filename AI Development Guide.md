@@ -54,8 +54,9 @@ Error handling follows Scott Wlaschin's Railway-Oriented Programming:
 
 ### DO ✅
 
-** NuGet package/Library use **
+**NuGet package/Library use**
 - Use standard libraries for functions where applicable (e.g. FsToolkit.ErrorHandling, Argu, etc)
+
 **Leverage .NET and F# Built-in Features**
 - Prefer built-in .NET libraries over third-party packages where applicable
 - Use `System.Net.Mail.MailAddress` for email validation, `System.IO` for file operations, etc.
@@ -143,6 +144,19 @@ Error handling follows Scott Wlaschin's Railway-Oriented Programming:
 - Use generic error matching (prefer specific error types)
 
 ## Code Patterns
+
+### Avoiding Primitive Obsession
+Primitive obsession occurs when primitive types like strings, integers, or tuples are overused instead of creating domain-specific types that better represent concepts. This anti-pattern makes code harder to understand, maintain, and prevents the compiler from catching bugs.
+
+**Decision Framework**
+
+Ask yourself these questions:
+
+1. **Does this value have invariants or validation rules?** → Create a type
+2. **Do these primitives always travel together?** → Create a record
+3. **Could I accidentally swap these values?** → Create distinct types
+4. **Does this represent a domain concept?** → Create a type
+5. **Am I at an I/O boundary?** → Primitives acceptable, convert immediately
 
 ### Layer Separation: Domain vs Infrastructure
 

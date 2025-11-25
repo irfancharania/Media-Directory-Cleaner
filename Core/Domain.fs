@@ -37,6 +37,13 @@ type ExistingDirectory =
     { FullPath: string
       Name: string }
 
+/// A directory with its associated files - shared across TV, Movies, Music
+/// Example: { Path = "Z:\Movies\Title (2010)"; Files = [file.mkv; poster.jpg; file.srt] }
+type DirectoryWithFiles = {
+    Path: string
+    Files: ExistingFile list
+}
+
 /// Media type classifications
 type MediaType =
     | Video

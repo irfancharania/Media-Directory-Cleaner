@@ -13,6 +13,24 @@ open Utility
 let ThresholdSizeMB = 100L<MB>
 
 // ============================================================================
+// Domain Types for TV Shows
+// ============================================================================
+
+/// Represents different types of TV show directory structures
+/// Example: SeasonFolder "Z:\TV\Show Name\Season 01"
+///          ShowFolderWithoutSeasons "Z:\TV\Show Name"
+type TVShowPath =
+    | SeasonFolderPath of path: string
+    | ShowFolderWithoutSeasonsPath of path: string
+
+/// Separated TV directories by type
+/// Example: { SeasonFolders = ["Season 01", "Season 02"]; ShowFoldersWithoutSeasons = ["Show Root"] }
+type LeafDirectoryClassification = {
+    SeasonFolders: string list
+    ShowFoldersWithoutSeasons: string list
+}
+
+// ============================================================================
 // File Classification (Pure)
 // ============================================================================
 
@@ -95,24 +113,32 @@ let private extractDeletableItems (classifications: DirectoryClassification list
 // Show Folder Detection (Pure)
 // ============================================================================
 
-/// Separated leaf directories by type
-type LeafDirectoryClassification = {
-    SeasonFolders: string list
-    ShowFoldersWithoutSeasons: string list
-}
-
 /// Check if directory contains a tvshow.nfo file (indicator of show root)
-let private isShowRootFolder (path: string) : bool =
+let internal isShowRootFolder (path: string) : bool =
     try
         File.Exists(Path.Combine(path, "tvshow.nfo"))
     with
     | _ -> false
 
+/// Classify TV directory type based on structure
+let internal classifyTVDirectory (path: string) : TVShowPath =
+    if isShowRootFolder path then
+        ShowFolderWithoutSeasonsPath path
+    else
+        SeasonFolderPath path
+
 /// Separate leaf directories into season folders and show folders (without seasons)
-let private classifyLeafDirectories (leafDirs: seq<string>) : LeafDirectoryClassification =
-    let leafList = leafDirs |> Seq.toList
-    let showFolders = leafList |> List.filter isShowRootFolder
-    let seasonFolders = leafList |> List.filter (isShowRootFolder >> not)
+let internal classifyLeafDirectories (leafDirs: seq<string>) : LeafDirectoryClassification =
+    let classified = leafDirs |> Seq.map classifyTVDirectory |> Seq.toList
+    
+    let seasonFolders = 
+        classified 
+        |> List.choose (function SeasonFolderPath path -> Some path | _ -> None)
+    
+    let showFolders = 
+        classified 
+        |> List.choose (function ShowFolderWithoutSeasonsPath path -> Some path | _ -> None)
+    
     { SeasonFolders = seasonFolders
       ShowFoldersWithoutSeasons = showFolders }
 
@@ -120,8 +146,14 @@ let private classifyLeafDirectories (leafDirs: seq<string>) : LeafDirectoryClass
 // File Gathering (Infrastructure)
 // ============================================================================
 
+/// Directory with its associated files
+type DirectoryWithFiles = {
+    Path: string
+    Files: ExistingFile list
+}
+
 /// Gather all files for a directory including non-special subdirectories
-let private gatherDirectoryFiles (dir: string) : string * ExistingFile list =
+let private gatherDirectoryFiles (dir: string) : DirectoryWithFiles =
     let currentFiles = getFiles dir |> Seq.toList
     
     let subDirFiles =
@@ -135,7 +167,7 @@ let private gatherDirectoryFiles (dir: string) : string * ExistingFile list =
     
     let allFiles = List.append currentFiles subDirFiles
 
-    (dir, allFiles)
+    { Path = dir; Files = allFiles }
 
 // ============================================================================
 // Reporting (Side Effects at Edge)
@@ -189,17 +221,18 @@ let clean (path: string) (previewMode: PreviewMode) : Result<seq<DeletableItem>,
     |> Result.bind (Progress.wrap "Scanning directories" (getAllSubdirectories >> Result.liftDirectoryError))
     |> Result.bind (Progress.wrap "Finding leaf nodes" (filterToLeafNodes >> Result.liftDirectoryError))
     |> Result.map (fun leafDirs ->
-        let classified = 
-            Progress.run "Separating show folders" (fun () -> 
-                classifyLeafDirectories leafDirs)
+        let separated = 
+            Progress.run "Separating show folders" (fun () -> classifyLeafDirectories leafDirs)
         
         // Report show folders without seasons in preview mode
         if not isExecute then
-            reportShowFoldersWithoutSeasons classified.ShowFoldersWithoutSeasons
+            reportShowFoldersWithoutSeasons separated.ShowFoldersWithoutSeasons
         
-        classified.SeasonFolders)
+        separated.SeasonFolders)
     |> Result.map (Progress.wrapMap "Gathering files" (List.map gatherDirectoryFiles))
-    |> Result.map (Progress.wrapMap "Analyzing directories" (List.map classifyDirectory >> extractDeletableItems))
+    |> Result.map (Progress.wrapMap "Analyzing directories" (
+        List.map (fun dwf -> classifyDirectory (dwf.Path, dwf.Files)) 
+        >> extractDeletableItems))
     |> Result.bind (fun items ->
         if List.isEmpty items then
             Error (CleaningError (NothingToClean "No orphaned files or empty directories found"))
