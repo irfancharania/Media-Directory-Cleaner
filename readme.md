@@ -64,6 +64,32 @@ The tool is built to run repeatedly. What doesn't get cleaned on the first run m
 
 > **Important:** Run in preview mode first to verify what will be deleted!
 
+## Optimization
+
+### Movies Mode Optimization
+
+Movies mode uses a **timestamp-based optimization** to skip directories that haven't changed since the last run:
+- On first run, all directories are scanned
+- A `.lastrun` file is created with the timestamp
+- Subsequent runs only scan directories modified after that timestamp
+- This significantly speeds up repeated runs
+
+**Bypassing Optimization:**
+
+Use `--scan-all` (or `-a`) to bypass optimization and scan all directories:
+- Useful for reviewing **uncertain subtitles** that were previously skipped
+- Useful after changing subtitle language preferences
+- Useful for verification/audit runs
+
+```bash
+# Normal optimized run (fast)
+DirectoryCleaner.exe movies -p "Z:\Movies"
+
+# Scan everything (shows all uncertain subtitles)
+DirectoryCleaner.exe movies -p "Z:\Movies" --scan-all
+```
+
+> **Note:** The `--scan-all` flag only affects movies mode. TV and music modes don't use optimization.
 
 ## Modes
 
@@ -77,6 +103,9 @@ Leaf-nodes sized below **100 MB** will be subject for deletion, as movie files a
 - **Keeps**: English (eng, en, english), French (fre, fra, fr, français), Canadian French (fr-ca, québec)
 - **Removes**: 40+ other languages (spa, ger, ara, hin, ita, por, etc.)
 - **Keeps**: If language is uncertain, file is kept
+
+**Uncertain Subtitles:**
+Subtitles without recognizable language codes are flagged as "uncertain" and reported in preview mode. Use `--scan-all` to see these again on subsequent runs.
 
 #### Expected folder structure:
 
@@ -106,6 +135,13 @@ Movies
 All episode files for season/year are contained within the same folder. TV show files are expected to be in leaf nodes.
 
 Deletes all files sized below **100 MB** that do not have a corresponding large file, and are not named "folder" or "poster". Empty season folders (no video files) are also deleted.
+
+**Show Folders Without Seasons:**
+TV show root folders without season subdirectories are detected and reported for manual review. This can happen when:
+- All season folders were deleted (because they were empty)
+- New season folders will be added later
+
+These folders are flagged with `[NO SEASONS]` in preview mode for awareness.
 
 #### Expected folder structure:
 
@@ -172,6 +208,46 @@ PREVIEW MODE - The following items would be deleted with --execute
 
 Total: 1 directories, 1 files
 ```
+
+Scan all mode with uncertain subtitles:
+```
+Validating path... done
+Scanning directories... done
+Finding leaf nodes... done
+  Scan all mode: Checking all directories (optimization disabled)
+Finding small directories... done
+Classifying subtitles... done
+
+=== UNCERTAIN SUBTITLES (Review Manually) ===
+  [UNCERTAIN] Z:\Movies\Some Movie\subtitle.srt
+
+PREVIEW MODE - The following items would be deleted with --execute
+...
+```
+
+TV show folders without seasons:
+```
+Validating path... done
+Scanning directories... done
+Finding leaf nodes... done
+Separating show folders... done
+
+=== TV SHOW FOLDERS WITHOUT SEASONS (Review Manually) ===
+  [NO SEASONS] Z:\TV\Documentary Series
+
+Finding leaf nodes... done
+...
+```
+
+### Color Coding
+
+The tool uses color coding for different types of output:
+- **Cyan**: Preview mode banner
+- **Green**: Execute mode banner
+- **Yellow**: Directories to be deleted
+- **White**: Files to be deleted
+- **Magenta**: Items requiring manual review (uncertain subtitles, shows without seasons)
+- **Red**: Error messages
 
 ## Notes
 
