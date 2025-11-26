@@ -1,8 +1,10 @@
 module Domain
 
+// Note: Errors module defines error types, not Domain
+// Domain only defines success typesmodule Domain
+
 open System.IO
 open Size
-open Errors
 
 // ============================================================================
 // Domain Types - Making illegal states unrepresentable

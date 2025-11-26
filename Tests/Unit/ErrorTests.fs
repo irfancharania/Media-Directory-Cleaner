@@ -48,12 +48,6 @@ module ErrorTests =
         test <@ error.Contains("Permission denied") @>
 
     [<Fact>]
-    let ``NothingToClean error includes reason``() =
-        let reason = "No files found"
-        let error = CleaningError (NothingToClean reason) |> DomainError.toMessage
-        test <@ error.Contains(reason) @>
-
-    [<Fact>]
     let ``DeletionFailed error includes path and exception message``() =
         let testPath = "C:\\locked\\file.txt"
         let ex = System.Exception("File in use")
@@ -80,12 +74,6 @@ module ErrorTests =
     [<Fact>]
     let ``NoFilesFound returns None for optional message``() =
         let error = DirectoryError (NoFilesFound "test")
-        let msg = DomainError.toOptionalMessage error
-        test <@ msg = None @>
-
-    [<Fact>]
-    let ``NothingToClean returns None for optional message``() =
-        let error = CleaningError (NothingToClean "test")
         let msg = DomainError.toOptionalMessage error
         test <@ msg = None @>
 

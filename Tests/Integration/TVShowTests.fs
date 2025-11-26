@@ -20,14 +20,9 @@ module TVShowTests =
         
             match result with
             | Ok items ->
-                let season1 = Path.Combine(testDir, "Drama", "Season 01")
-                test <@ not (containsDirectory season1 items) @>
-                
-                let _, dirs = countItems items
-                test <@ dirs = 0 @>
-            | Error (DirectoryError (NoLeafNodes _)) 
-            | Error (CleaningError (NothingToClean _)) ->
-                ()
+                test <@ Seq.isEmpty items @>
+            | Error (DirectoryError (NoLeafNodes _)) ->
+                ()  // Show root is not a leaf if it has subdirectories
             | Error e ->
                 failwithf $"Unexpected error: {DomainError.toMessage e}"
         )
@@ -166,8 +161,6 @@ module TVShowTests =
             match result with
             | Ok items ->
                 test <@ Seq.isEmpty items @>
-            | Error (CleaningError (NothingToClean _)) ->
-                ()
             | Error e ->
                 failwithf $"Unexpected error: {DomainError.toMessage e}"
         )
@@ -185,8 +178,6 @@ module TVShowTests =
             match result with
             | Ok items ->
                 test <@ Seq.isEmpty items @>
-            | Error (CleaningError (NothingToClean _)) ->
-                ()
             | Error e ->
                 failwithf $"Unexpected error: {DomainError.toMessage e}"
         )
@@ -208,11 +199,9 @@ module TVShowTests =
             
             match result with
             | Ok items ->
-                // Folder images should NOT be deleted
+                test <@ Seq.isEmpty items @>
                 test <@ not (containsPathSubstring "folder.jpg" items) @>
                 test <@ not (containsPathSubstring "poster.png" items) @>
-            | Error (CleaningError (NothingToClean _)) ->
-                ()  // Expected - no orphans
             | Error e ->
                 failwithf $"Unexpected error: {DomainError.toMessage e}"
         )
@@ -325,7 +314,7 @@ module TVShowTests =
     // ============================================================================
 
     [<Fact>]
-    let ``No items to clean returns appropriate error``() =
+    let ``No items to clean returns empty list``() =
         let structure = [
             ("Show/Season 01/Episode.mp4", Some 600000000L)
             ("Show/Season 01/Episode.srt", Some 50000L)
@@ -335,10 +324,8 @@ module TVShowTests =
             let result = TVShows.clean testDir Domain.Preview
             
             match result with
-            | Ok _ ->
-                failwith "Should return error when nothing to clean"
-            | Error (CleaningError (NothingToClean _)) ->
-                ()
+            | Ok items ->
+                test <@ Seq.isEmpty items @>
             | Error e ->
                 failwithf $"Unexpected error type: {DomainError.toMessage e}"
         )

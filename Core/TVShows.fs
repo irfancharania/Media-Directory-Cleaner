@@ -233,14 +233,10 @@ let clean (path: string) (previewMode: PreviewMode) : Result<seq<DeletableItem>,
     |> Result.map (Progress.wrapMap "Analyzing directories" (
         List.map (fun dwf -> classifyDirectory (dwf.Path, dwf.Files)) 
         >> extractDeletableItems))
-    |> Result.bind (fun items ->
-        if List.isEmpty items then
-            Error (CleaningError (NothingToClean "No orphaned files or empty directories found"))
-        else
-            Ok items)
-    |> Result.bind (fun items ->
+    |> Result.map (fun items ->
         if isExecute then
             Progress.wrap "Deleting items" (executeDelete logFilePath) items
         else
             Ok items)
+    |> Result.bind id  // Flatten nested Result
     |> Result.map Seq.ofList

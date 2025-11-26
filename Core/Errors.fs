@@ -18,7 +18,6 @@ type DirectoryError =
     | AccessDenied of path: string * exn: Exception
 
 type CleaningError =
-    | NothingToClean of reason: string
     | DeletionFailed of path: string * exn: Exception
 
 type DomainError =
@@ -48,7 +47,6 @@ module DomainError =
         
         | CleaningError ce ->
             match ce with
-            | NothingToClean reason -> $"Nothing to clean: {reason}"
             | DeletionFailed (path, ex) -> $"Failed to delete: {path} ({ex.Message})"
     
     /// Convert to an optional message (None for non-critical errors)
@@ -56,8 +54,7 @@ module DomainError =
         match error with
         | DirectoryError (NoSubdirectories _)
         | DirectoryError (NoLeafNodes _)
-        | DirectoryError (NoFilesFound _)
-        | CleaningError (NothingToClean _) -> 
+        | DirectoryError (NoFilesFound _) -> 
             None  // Expected conditions, not errors to report
         | _ -> 
             Some (toMessage error)

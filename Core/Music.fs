@@ -68,14 +68,10 @@ let clean (path: string) (previewMode: PreviewMode) : Result<seq<DeletableItem>,
     |> Result.bind (Progress.wrap "Finding leaf nodes" (filterToLeafNodes >> Result.liftDirectoryError))
     |> Result.map (Progress.wrapMap "Scanning for audio files" (Seq.map gatherFilesForDirectory >> Seq.toList))
     |> Result.map (Progress.wrapMap "Finding empty directories" findDirectoriesWithoutAudio)
-    |> Result.bind (fun items ->
-        if List.isEmpty items then
-            Error (CleaningError (NothingToClean "No directories without audio files"))
-        else
-            Ok items)
-    |> Result.bind (fun items ->
+    |> Result.map (fun items ->
         if isExecute then
             Progress.wrap "Deleting directories" (executeDelete logFilePath) items
         else
             Ok items)
+    |> Result.bind id  // Flatten nested Result
     |> Result.map Seq.ofList

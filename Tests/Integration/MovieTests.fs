@@ -58,9 +58,8 @@ module MovieTests =
             
             match result with
             | Ok items ->
+                test <@ Seq.isEmpty items @>
                 test <@ not (containsPathSubstring "extrafanart" items) @>
-            | Error (CleaningError (NothingToClean _)) ->
-                ()
             | Error e ->
                 failwithf $"Unexpected error: {DomainError.toMessage e}"
         )
@@ -98,8 +97,6 @@ module MovieTests =
                 let files, dirs = countItems items
                 test <@ files = 4 @>
                 test <@ dirs = 0 @>
-            | Error (CleaningError (NothingToClean _)) ->
-                failwith "Should have found subtitles to delete"
             | Error e ->
                 failwithf $"Unexpected error: {DomainError.toMessage e}"
         )
@@ -164,14 +161,12 @@ module MovieTests =
             // First run with optimization - creates .lastrun
             let _ = Movies.clean testDir Domain.Execute Domain.Optimized
             
-            // Second run with optimization - should skip (no changes)
+            // Second run with optimization - should return empty (no changes)
             let resultOptimized = Movies.clean testDir Domain.Preview Domain.Optimized
             
             match resultOptimized with
-            | Error (CleaningError (NothingToClean _)) ->
-                ()  // Expected - optimization skips unchanged directories
-            | Ok _ ->
-                failwith "Optimized mode should skip unchanged directories"
+            | Ok items ->
+                test <@ Seq.isEmpty items @>  // Optimization skipped unchanged directories
             | Error e ->
                 failwithf $"Unexpected error: {DomainError.toMessage e}"
             
@@ -197,20 +192,21 @@ module MovieTests =
             // First run
             let _ = Movies.clean testDir Domain.Preview Domain.Optimized
             
-            // Second run with optimization - skips unchanged
+            // Second run with optimization - returns empty (no changes)
             let resultOptimized = Movies.clean testDir Domain.Preview Domain.Optimized
             match resultOptimized with
-            | Error (CleaningError (NothingToClean _)) -> ()
-            | _ -> ()
+            | Ok items -> test <@ Seq.isEmpty items @>
+            | Error e -> failwithf $"Unexpected error: {DomainError.toMessage e}"
             
-            // ScanAll should process everything again
+            // ScanAll should process everything again (uncertain subtitle not deleted, but processed)
             let resultScanAll = Movies.clean testDir Domain.Preview Domain.ScanAll
             
-            // Should not error (uncertain subtitle doesn't get deleted)
             match resultScanAll with
-            | Ok _ -> ()  // No items to delete, but processed
-            | Error (CleaningError (NothingToClean _)) -> ()  // Also valid
-            | Error e -> failwithf $"Unexpected error: {DomainError.toMessage e}"
+            | Ok items -> 
+                // Should return empty (uncertain subtitle is kept, not deleted)
+                test <@ Seq.isEmpty items @>
+            | Error e -> 
+                failwithf $"Unexpected error: {DomainError.toMessage e}"
         )
 
     // ============================================================================
@@ -283,7 +279,7 @@ module MovieTests =
     // ============================================================================
 
     [<Fact>]
-    let ``No items to clean returns appropriate error``() =
+    let ``No items to clean returns empty list``() =
         let structure = [
             ("Good Movie/movie.mp4", Some 1000000000L)
             ("Good Movie/eng.srt", Some 50000L)
@@ -294,10 +290,8 @@ module MovieTests =
             let result = Movies.clean testDir Domain.Preview Domain.Optimized
             
             match result with
-            | Ok _ ->
-                failwith "Should return error when nothing to clean"
-            | Error (CleaningError (NothingToClean _)) ->
-                ()
+            | Ok items ->
+                test <@ Seq.isEmpty items @>
             | Error e ->
                 failwithf $"Unexpected error type: {DomainError.toMessage e}"
         )

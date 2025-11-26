@@ -69,10 +69,7 @@ module MusicTests =
         
             match result with
             | Ok items ->
-                let album = Path.Combine(testDir, "Artist", "Good Album")
-                test <@ not (containsDirectory album items) @>
-            | Error (CleaningError (NothingToClean _)) ->
-                ()
+                test <@ Seq.isEmpty items @>
             | Error e ->
                 failwithf $"Unexpected error: {DomainError.toMessage e}"
         )
@@ -89,10 +86,7 @@ module MusicTests =
             
             match result with
             | Ok items ->
-                let album = Path.Combine(testDir, "Artist", "Album")
-                test <@ not (containsDirectory album items) @>
-            | Error (CleaningError (NothingToClean _)) ->
-                ()
+                test <@ Seq.isEmpty items @>
             | Error e ->
                 failwithf $"Unexpected error: {DomainError.toMessage e}"
         )
@@ -112,10 +106,8 @@ module MusicTests =
             let result = Music.clean testDir Domain.Preview
             
             match result with
-            | Ok _ ->
-                failwith "Should not find items to delete"
-            | Error (CleaningError (NothingToClean _)) ->
-                ()
+            | Ok items ->
+                test <@ Seq.isEmpty items @>
             | Error e ->
                 failwithf $"Unexpected error: {DomainError.toMessage e}"
         )
@@ -131,10 +123,8 @@ module MusicTests =
             let result = Music.clean testDir Domain.Preview
             
             match result with
-            | Ok _ ->
-                failwith "Should not find items to delete"
-            | Error (CleaningError (NothingToClean _)) ->
-                ()
+            | Ok items ->
+                test <@ Seq.isEmpty items @>
             | Error e ->
                 failwithf $"Unexpected error: {DomainError.toMessage e}"
         )
@@ -150,10 +140,8 @@ module MusicTests =
             let result = Music.clean testDir Domain.Preview
             
             match result with
-            | Ok _ ->
-                failwith "Should not find items to delete"
-            | Error (CleaningError (NothingToClean _)) ->
-                ()
+            | Ok items ->
+                test <@ Seq.isEmpty items @>
             | Error e ->
                 failwithf $"Unexpected error: {DomainError.toMessage e}"
         )
@@ -168,10 +156,8 @@ module MusicTests =
             let result = Music.clean testDir Domain.Preview
             
             match result with
-            | Ok _ ->
-                failwith "Should not find items to delete"
-            | Error (CleaningError (NothingToClean _)) ->
-                ()
+            | Ok items ->
+                test <@ Seq.isEmpty items @>
             | Error e ->
                 failwithf $"Unexpected error: {DomainError.toMessage e}"
         )
@@ -209,10 +195,8 @@ module MusicTests =
             let result = Music.clean testDir Domain.Preview
             
             match result with
-            | Ok _ ->
-                failwith "Should not find items to delete"
-            | Error (CleaningError (NothingToClean _)) ->
-                ()
+            | Ok items ->
+                test <@ Seq.isEmpty items @>
             | Error e ->
                 failwithf $"Unexpected error: {DomainError.toMessage e}"
         )
@@ -352,9 +336,8 @@ module MusicTests =
             let result = Music.clean testDir Domain.Execute
             
             match result with
-            | Ok _ ->
-                failwith "Should not find items to delete"
-            | Error (CleaningError (NothingToClean _)) ->
+            | Ok items ->
+                test <@ Seq.isEmpty items @>
                 test <@ Directory.Exists(album) @>
                 test <@ File.Exists(audioFile) @>
             | Error e ->
@@ -366,7 +349,7 @@ module MusicTests =
     // ============================================================================
 
     [<Fact>]
-    let ``No items to clean returns appropriate error``() =
+    let ``No items to clean returns empty list``() =
         let structure = [
             ("Artist/Album/track.mp3", Some 5000000L)
             ("Artist/Album/cover.jpg", Some 50000L)
@@ -376,10 +359,8 @@ module MusicTests =
             let result = Music.clean testDir Domain.Preview
             
             match result with
-            | Ok _ ->
-                failwith "Should return error when nothing to clean"
-            | Error (CleaningError (NothingToClean _)) ->
-                ()
+            | Ok items ->
+                test <@ Seq.isEmpty items @>
             | Error e ->
                 failwithf $"Unexpected error type: {DomainError.toMessage e}"
         )
@@ -430,10 +411,8 @@ module MusicTests =
             let result = Music.clean testDir Domain.Preview
             
             match result with
-            | Ok _ ->
-                failwith "Should not find items to delete"
-            | Error (CleaningError (NothingToClean _)) ->
-                ()
+            | Ok items ->
+                test <@ Seq.isEmpty items @>
             | Error e ->
                 failwithf $"Unexpected error: {DomainError.toMessage e}"
         )

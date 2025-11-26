@@ -231,15 +231,8 @@ let clean (path: string) (previewMode: PreviewMode) (scanMode: ScanMode) : Resul
         List.append foldersToDelete analysis.ToDelete
         |> List.distinctBy DeletableItem.path
         |> List.sortBy DeletableItem.path)
-    
-    // Phase 6: Check if anything to clean
-    |> Result.bind (fun items ->
-        if List.isEmpty items then
-            Error (CleaningError (NothingToClean "No directories or subtitles to clean"))
-        else
-            Ok items)
-    
-    // Phase 7: Execute or preview
+
+    // Phase 6: Execute or preview
     |> Result.bind (fun items ->
         if isExecute then
             Progress.wrap "Deleting items" (executeDelete logFilePath) items

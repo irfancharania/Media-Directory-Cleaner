@@ -339,8 +339,6 @@ module FileSystemTests =
             ()  // File.Delete doesn't throw for non-existent files
         | Error (DeletionFailed (path, _)) ->
             test <@ path.Contains("NonExistent") @>
-        | Error e ->
-            failwithf $"Unexpected error type: {e}"
 
     [<Fact>]
     let ``deleteDirectories returns error with path for non-existent directory``() =
@@ -352,5 +350,3 @@ module FileSystemTests =
             failwith "Expected error for non-existent directory"
         | Error (DeletionFailed (path, _)) ->
             test <@ path = badPath @>
-        | Error e ->
-            failwithf $"Unexpected error type: {e}"
