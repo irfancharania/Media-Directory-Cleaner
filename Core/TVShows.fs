@@ -177,9 +177,9 @@ let private gatherDirectoryFiles (dir: string) : DirectoryWithFiles =
 let private reportShowFoldersWithoutSeasons (showFolders: string list) : unit =
     if not (List.isEmpty showFolders) then
         Progress.info ""
-        Progress.info "=== TV SHOW FOLDERS WITHOUT SEASONS (Review Manually) ==="
+        Progress.colored ConsoleColor.Magenta "=== TV SHOW FOLDERS WITHOUT SEASONS (Review Manually) ==="
         showFolders |> List.iter (fun path -> 
-            Progress.info $"  [NO SEASONS] {path}")
+            Progress.colored ConsoleColor.Magenta $"  [NO SEASONS] {path}")
         Progress.info ""
 
 // ============================================================================

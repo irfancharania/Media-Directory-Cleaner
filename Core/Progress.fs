@@ -14,6 +14,15 @@ let private writeError (message: string) =
 let private writeErrorLine (message: string) =
     Console.Error.WriteLine(message)
 
+/// Write colored text to stderr (with newline)
+let colored (color: ConsoleColor) (message: string) =
+    let oldColor = Console.ForegroundColor
+    try
+        Console.ForegroundColor <- color
+        writeErrorLine message
+    finally
+        Console.ForegroundColor <- oldColor
+
 /// Run a function with progress indication
 /// Shows "message... " before, "done" after
 let run<'a> (message: string) (f: unit -> 'a) : 'a =

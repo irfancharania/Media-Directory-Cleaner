@@ -8,20 +8,12 @@ open CliArguments
 // Console Output Helpers (stdout for results only)
 // ============================================================================
 
-let printColored color text =
-    let oldColor = Console.ForegroundColor
-    try
-        Console.ForegroundColor <- color
-        printfn "%s" text
-    finally
-        Console.ForegroundColor <- oldColor
-
 let printItem item =
     match item with
     | DeletableItem.Directory path ->
-        printColored ConsoleColor.Yellow $"  [DIR]  {path}"
+        Progress.colored ConsoleColor.Yellow $"  [DIR]  {path}"
     | DeletableItem.File path ->
-        printColored ConsoleColor.White $"  [FILE] {path}"
+        Progress.colored ConsoleColor.White $"  [FILE] {path}"
 
 // ============================================================================
 // Application Logic
@@ -44,10 +36,10 @@ let runClean (mode: CleanMode) (path: string) (previewMode: PreviewMode) (scanMo
             printfn "No items to clean."
         else
             if previewMode = Domain.Preview then
-                printColored ConsoleColor.Cyan "PREVIEW MODE - The following items would be deleted with --execute"
+                Progress.colored ConsoleColor.Cyan "PREVIEW MODE - The following items would be deleted with --execute"
                 printfn ""
             else
-                printColored ConsoleColor.Green "Items deleted:"
+                Progress.colored ConsoleColor.Green "Items deleted:"
                 printfn ""
             
             items |> Seq.iter printItem

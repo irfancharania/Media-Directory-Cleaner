@@ -1,5 +1,6 @@
 ﻿module Movies
 
+open System
 open System.IO
 open FsToolkit.ErrorHandling
 open Domain
@@ -139,9 +140,9 @@ let private reportOptimizationStats (stats: OptimizationStats) : unit =
 let private reportUncertainSubtitles (uncertainSubtitles: string list) : unit =
     if not (List.isEmpty uncertainSubtitles) then
         Progress.info ""
-        Progress.info "=== UNCERTAIN SUBTITLES (Review Manually) ==="
+        Progress.colored ConsoleColor.Magenta "=== UNCERTAIN SUBTITLES (Review Manually) ==="
         uncertainSubtitles |> List.iter (fun path -> 
-            Progress.info $"  [UNCERTAIN] {path}")
+            Progress.colored ConsoleColor.Magenta $"  [UNCERTAIN] {path}")
         Progress.info ""
 
 // ============================================================================

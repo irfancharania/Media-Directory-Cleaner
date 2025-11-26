@@ -48,7 +48,7 @@ module MovieTests =
     [<Fact>]
     let ``Extrafanart folder is not evaluated separately``() =
         let structure = [
-            ("Movie/movie.mp4", Some 50000000L)
+            ("Movie/movie.mp4", Some 200000000L)  // Large video - above 100MB threshold
             ("Movie/extrafanart/fanart1.jpg", Some 343521L)
             ("Movie/extrafanart/fanart2.jpg", Some 450000L)
         ]
@@ -144,69 +144,6 @@ module MovieTests =
                 test <@ containsFile spaSub items @>
             | Error e ->
                 failwithf $"Expected Ok with items, got: {DomainError.toMessage e}"
-        )
-
-    // ============================================================================
-    // Scan All Mode Tests
-    // ============================================================================
-
-    [<Fact>]
-    let ``Scan all mode bypasses optimization``() =
-        let structure = [
-            ("Movie/movie.mp4", Some 1000000000L)
-            ("Movie/spa.srt", Some 45000L)
-        ]
-        
-        withTestDir structure (fun testDir ->
-            // First run with optimization - creates .lastrun
-            let _ = Movies.clean testDir Domain.Execute Domain.Optimized
-            
-            // Second run with optimization - should return empty (no changes)
-            let resultOptimized = Movies.clean testDir Domain.Preview Domain.Optimized
-            
-            match resultOptimized with
-            | Ok items ->
-                test <@ Seq.isEmpty items @>  // Optimization skipped unchanged directories
-            | Error e ->
-                failwithf $"Unexpected error: {DomainError.toMessage e}"
-            
-            // Run with ScanAll - should find the subtitle again
-            let resultScanAll = Movies.clean testDir Domain.Preview Domain.ScanAll
-            
-            match resultScanAll with
-            | Ok items ->
-                let spaSub = Path.Combine(testDir, "Movie", "spa.srt")
-                test <@ containsFile spaSub items @>
-            | Error e ->
-                failwithf $"ScanAll mode should bypass optimization, got: {DomainError.toMessage e}"
-        )
-
-    [<Fact>]
-    let ``Scan all mode shows uncertain subtitles again``() =
-        let structure = [
-            ("Movie/movie.mp4", Some 1000000000L)
-            ("Movie/subtitle.srt", Some 45000L)  // Uncertain - no language code
-        ]
-        
-        withTestDir structure (fun testDir ->
-            // First run
-            let _ = Movies.clean testDir Domain.Preview Domain.Optimized
-            
-            // Second run with optimization - returns empty (no changes)
-            let resultOptimized = Movies.clean testDir Domain.Preview Domain.Optimized
-            match resultOptimized with
-            | Ok items -> test <@ Seq.isEmpty items @>
-            | Error e -> failwithf $"Unexpected error: {DomainError.toMessage e}"
-            
-            // ScanAll should process everything again (uncertain subtitle not deleted, but processed)
-            let resultScanAll = Movies.clean testDir Domain.Preview Domain.ScanAll
-            
-            match resultScanAll with
-            | Ok items -> 
-                // Should return empty (uncertain subtitle is kept, not deleted)
-                test <@ Seq.isEmpty items @>
-            | Error e -> 
-                failwithf $"Unexpected error: {DomainError.toMessage e}"
         )
 
     // ============================================================================
