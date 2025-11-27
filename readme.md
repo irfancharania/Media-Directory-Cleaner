@@ -50,6 +50,9 @@ There are 3 available modes:
 
 # Scan all directories (bypass optimization to see uncertain subtitles)
 > DirectoryCleaner.exe movies -p "Z:\Movies" --scan-all
+
+# Scan all directories and execute cleaning
+> DirectoryCleaner.exe movies -p "Z:\Movies" --scan-all --execute
 ```
 
 ### Scheduled Task
@@ -64,33 +67,6 @@ The tool is built to run repeatedly. What doesn't get cleaned on the first run m
 
 > **Important:** Run in preview mode first to verify what will be deleted!
 
-## Optimization
-
-### Movies Mode Optimization
-
-Movies mode uses a **timestamp-based optimization** to skip directories that haven't changed since the last run:
-- On first run, all directories are scanned
-- A `.lastrun` file is created with the timestamp
-- Subsequent runs only scan directories modified after that timestamp
-- This significantly speeds up repeated runs
-
-**Bypassing Optimization:**
-
-Use `--scan-all` (or `-a`) to bypass optimization and scan all directories:
-- Useful for reviewing **uncertain subtitles** that were previously skipped
-- Useful after changing subtitle language preferences
-- Useful for verification/audit runs
-
-```bash
-# Normal optimized run (fast)
-DirectoryCleaner.exe movies -p "Z:\Movies"
-
-# Scan everything (shows all uncertain subtitles)
-DirectoryCleaner.exe movies -p "Z:\Movies" --scan-all
-```
-
-> **Note:** The `--scan-all` flag only affects movies mode. TV and music modes don't use optimization.
-
 ## Modes
 
 ### Movies
@@ -99,13 +75,23 @@ The main movie folder may contain set folders with subdirectories.
 
 Leaf-nodes sized below **100 MB** will be subject for deletion, as movie files are generally greater than this size. Any leftover directories will become leaf directories for the next run.
 
+**Optimization**
+
+Movies mode uses a **timestamp-based optimization** to skip directories that haven't changed since the last run:
+- On first run, all directories are scanned
+- A `.lastrun` file is created with the timestamp
+- Subsequent runs only scan directories modified after that timestamp
+
 **Subtitle Management:**
+
 - **Keeps**: English (eng, en, english), French (fre, fra, fr, français), Canadian French (fr-ca, québec)
 - **Removes**: 40+ other languages (spa, ger, ara, hin, ita, por, etc.)
 - **Keeps**: If language is uncertain, file is kept
 
 **Uncertain Subtitles:**
+
 Subtitles without recognizable language codes are flagged as "uncertain" and reported in preview mode. Use `--scan-all` to see these again on subsequent runs.
+
 
 #### Expected folder structure:
 
@@ -239,23 +225,14 @@ Finding leaf nodes... done
 ...
 ```
 
-### Color Coding
-
-The tool uses color coding for different types of output:
-- **Cyan**: Preview mode banner
-- **Green**: Execute mode banner
-- **Yellow**: Directories to be deleted
-- **White**: Files to be deleted
-- **Magenta**: Items requiring manual review (uncertain subtitles, shows without seasons)
-- **Red**: Error messages
-
 ## Notes
 
 > - **.actors** and **extrafanart** folders are never evaluated for deletion. Their fate is determined by their parent folder
 > - **Iterative cleaning**: The tool processes leaf directories only. Run multiple times to clean newly exposed leaf nodes after deletions
 > - Preview mode is the default. Use `--execute` to actually delete
-> - When in doubt, files are kept untouched
-> - Movies mode uses optimization by default. Use `--scan-all` to bypass and see all uncertain subtitles
+> - Files are not deleted unless tool can definitively identify
+> - Movies mode will only scan recently created/modified directories. Use `--scan-all` to bypass and scan all directories to see subtitles the tool cannot identify
+> - The `--scan-all` flag only affects movies mode. TV and music modes don't use optimization because of their nested file structure.
 
 ## Building
 
@@ -282,9 +259,9 @@ dotnet run --project src/DirectoryCleaner.fsproj movies -p "Z:\Movies"
 ## Project History
 
 This tool has evolved through several iterations:
-1. **Original**: AutoIT script (circa 2005)
-2. **F# 3 rewrite**: First F# implementation (2015)
-3. **F# 10 rewrite**: Enhanced version with modern F# practices and comprehensive test coverage (2025)
+1. 2005 - **Original**: AutoIT script
+2. 2015 - **F# 3 rewrite**: First F# implementation
+3. 2025 - **F# 10 rewrite**: Enhanced version with modern F# practices and comprehensive test coverage (2025)
 
 ## License
 
