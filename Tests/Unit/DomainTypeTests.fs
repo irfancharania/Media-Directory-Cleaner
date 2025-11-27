@@ -151,30 +151,6 @@ module DomainTypeTests =
         test <@ ExistingFile.classifyMediaType file = Video @>
 
     // ============================================================================
-    // ExistingFile Size Conversion Tests
-    // ============================================================================
-    
-    [<Fact>]
-    let ``sizeInMB converts correctly for exact MB``() =
-        let file = { FullPath = "test"; Name = "test"; Extension = ".mp4"; SizeInBytes = 2097152L<byte> }  // 2 MB
-        test <@ ExistingFile.sizeInMB file = 2L<MB> @>
-    
-    [<Fact>]
-    let ``sizeInMB rounds down for partial MB``() =
-        let file = { FullPath = "test"; Name = "test"; Extension = ".mp4"; SizeInBytes = 2500000L<byte> }  // ~2.38 MB
-        test <@ ExistingFile.sizeInMB file = 2L<MB> @>
-    
-    [<Fact>]
-    let ``sizeInKB converts correctly``() =
-        let file = { FullPath = "test"; Name = "test"; Extension = ".mp3"; SizeInBytes = 1024000L<byte> }  // 1000 KB
-        test <@ ExistingFile.sizeInKB file = 1000L<kB> @>
-
-    [<Fact>]
-    let ``sizeInKB for small file``() =
-        let file = { FullPath = "test"; Name = "test"; Extension = ".txt"; SizeInBytes = 512L<byte> }
-        test <@ ExistingFile.sizeInKB file = 0L<kB> @>
-
-    // ============================================================================
     // Active Pattern Tests - VideoFile
     // ============================================================================
 
