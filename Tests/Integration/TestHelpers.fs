@@ -66,8 +66,8 @@ module TestHelpers =
     
     /// Movie with video file and various subtitles
     let movieWithVideoAndSubtitles movieName videoName = [
-        // Main video (870 MB)
-        ($"{movieName}/{videoName}.mp4", Some 871531057L)
+        // Main video (170 MB)
+        ($"{movieName}/{videoName}.mp4", Some 171531057L)
         ($"{movieName}/{videoName}.nfo", Some 15025L)
         // English subtitles
         ($"{movieName}/English.srt", Some 129119L)
