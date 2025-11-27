@@ -259,9 +259,9 @@ dotnet run --project src/DirectoryCleaner.fsproj movies -p "Z:\Movies"
 ## Project History
 
 This tool has evolved through several iterations:
-1. 2005 - **Original**: AutoIT script
-2. 2015 - **F# 3 rewrite**: First F# implementation
-3. 2025 - **F# 10 rewrite**: Enhanced version with modern F# practices and comprehensive test coverage (2025)
+* 2005 - **Original**: AutoIT script
+* 2015 - **F# 3 rewrite**: First F# implementation
+* 2025 - **F# 10 rewrite**: Enhanced version with modern F# practices and comprehensive test coverage (2025)
 
 ## License
 
