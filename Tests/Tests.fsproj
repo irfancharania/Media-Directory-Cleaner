@@ -1,0 +1,44 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net10.0</TargetFramework>
+		<IsPackable>false</IsPackable>
+		<IsTestProject>true</IsTestProject>
+		<PlatformTarget>x64</PlatformTarget>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<!-- Shared Helpers -->
+		
+		<!-- Unit Tests -->
+		<Compile Include="Unit\ErrorTests.fs" />
+		<Compile Include="Unit\DomainTypeTests.fs" />
+		<Compile Include="Unit\DomainPropertyTests.fs" />
+		<Compile Include="Unit\SubtitleTests.fs" />
+		<Compile Include="Unit\SubtitlePropertyTests.fs" />
+		<Compile Include="Unit\ArguTests.fs" />
+		<Compile Include="Integration\TestHelpers.fs" />
+		
+		<!-- Integration Tests -->
+		<Compile Include="Integration\FileSystemTests.fs" />
+		<Compile Include="Integration\MovieTests.fs" />
+		<Compile Include="Integration\TVShowTests.fs" />
+		<Compile Include="Integration\TVShowClassificationTests.fs" />
+		<Compile Include="Integration\MusicTests.fs" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="FsCheck.Xunit" Version="3.3.2" />
+		<PackageReference Include="Unquote" Version="7.0.1" />
+		<PackageReference Include="xunit" Version="2.9.3" />
+		<PackageReference Include="xunit.runner.visualstudio" Version="3.1.5">
+			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+			<PrivateAssets>all</PrivateAssets>
+		</PackageReference>
+		<PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.0.1" />
+		<PackageReference Include="FsUnit.xUnit" Version="7.1.1" />
+		<ProjectReference Include="..\Core\DirectoryCleaner.fsproj" />
+		<PackageReference Update="FSharp.Core" Version="10.0.100" />
+	</ItemGroup>
+
+</Project>

@@ -1,77 +1,109 @@
 ﻿open System
-open ROP
-open Directory
-open FSharp.ConsoleApp
+open Argu
+open Errors
+open Domain
+open CliArguments
 
-///Convert a function to a console application handler e.g. - returns 0 for success or 1 for errors.
-let handler f = 
-    fun args -> 
-        try 
+// ============================================================================
+// Console Output Helpers (stdout for results only)
+// ============================================================================
+
+let printItem item =
+    match item with
+    | DeletableItem.Directory path ->
+        Progress.colored ConsoleColor.Yellow $"  [DIR]  {path}"
+    | DeletableItem.File path ->
+        Progress.colored ConsoleColor.White $"  [FILE] {path}"
+
+// ============================================================================
+// Application Logic
+// ============================================================================
+
+let runClean (mode: CleanMode) (path: string) (previewMode: PreviewMode) (scanMode: ScanMode) =
+    
+    let result = 
+        match mode with
+        | CleanMode.Tv -> TVShows.clean path previewMode
+        | CleanMode.Movies -> Movies.clean path previewMode scanMode
+        | CleanMode.Music -> Music.clean path previewMode
+    
+    match result with
+    | Ok items ->
+        // Blank line after progress output
+        Progress.info ""
+
+        if Seq.isEmpty items then
+            printfn "No items to clean."
+        else
+            if previewMode = Domain.Preview then
+                Progress.colored ConsoleColor.Cyan "PREVIEW MODE - The following items would be deleted with --execute"
+                printfn ""
+            else
+                Progress.colored ConsoleColor.Green "Items deleted:"
+                printfn ""
+            
+            items |> Seq.iter printItem
+            
+            // Summary
+            let dirs = items |> Seq.filter (function DeletableItem.Directory _ -> true | _ -> false) |> Seq.length
+            let files = items |> Seq.filter (function DeletableItem.File _ -> true | _ -> false) |> Seq.length
             printfn ""
-            f args
-            // pause for debug
-            // System.Console.ReadKey() |> ignore
-            0
-        with e -> 
-            printfn "Error: %s" e.Message
+            printfn $"Total: {dirs} directories, {files} files"
+        0
+    | Error error ->
+        match DomainError.toOptionalMessage error with
+        | Some msg -> 
+            Progress.error msg
             1
+        | None -> 
+            printfn ""
+            printfn "Nothing to clean."
+            0
 
-///Contains a handler that prints the application usage
-module Usage = 
-    ///Prints the usage to the console
-    let print() = 
-        printfn "Usage:"
-        printfn "  example <command> [--<flag> ...] [-<setting> value ...]"
-        printfn ""
-        printfn "Commands:"
-        printfn "  tv -path <TV Shows path> [--preview]"
-        printfn "  movies -path <Movies path> [--preview]"
-        printfn "  music -path <Music path> [--preview]"
-    
-    ///A handler which prints the usage to the console
-    let exec = handler (fun _ -> print())
+// ============================================================================
+// Entry Point
+// ============================================================================
 
-module Cleaner = 
-    ///The key used for the folder path setting
-    [<Literal>]
-    let PathKey = "path"
-    
-    ///The key used for the preview flag
-    [<Literal>]
-    let PreviewFlag = "preview"
-    
-    let private exec f = 
-        handler (fun args -> 
-            let path = App.tryGetSetting PathKey args
-            let preview = App.isFlagged PreviewFlag args
-            match path, preview with
-            | Some path, preview -> 
-                let result = f path preview |> mapMessagesR Directory.convertFailureMessage
-                match result with
-                | Success(x, _) -> x |> Seq.iter (fun y -> printfn "%s" y)
-                | Failure x -> 
-                    let err = x |> Seq.fold (+) ""
-                    if err <> "" then failwith err
-            | _ -> Usage.print())
-    
-    let execTV = exec Directory.TV.cleanDirectory
-    let execMovies = exec Directory.Movies.cleanDirectory
-    let execMusic = exec Directory.Music.cleanDirectory
-
-///Contains literals of commands
-module Commands = 
-    [<Literal>]
-    let TV = "tv"
-    
-    [<Literal>]
-    let Movies = "movies"
-
-    [<Literal>]
-    let Music = "music"
-
-///Application entry point
 [<EntryPoint>]
-let main argv = 
-    App.run Usage.exec [ (Commands.TV, Cleaner.execTV)
-                         (Commands.Movies, Cleaner.execMovies)
-                         (Commands.Music, Cleaner.execMusic) ] argv
+let main argv =
+    let errorHandler = ProcessExiter(colorizer = function ErrorCode.HelpText -> None | _ -> Some ConsoleColor.Red)
+    let parser = createParser (Some errorHandler)
+    
+    let assembly = Reflection.Assembly.GetExecutingAssembly()
+    let version = assembly.GetName().Version
+    let versionString = version.ToString()
+    
+    // If no arguments, show usage with version and exit
+    if argv.Length = 0 then
+        printfn $"DirectoryCleaner v{versionString} - Kodi/XBMC Media Directory Cleaner"
+        printfn ""
+        printfn "%s" (parser.PrintUsage())
+        0
+    else
+        try
+            let results = parser.ParseCommandLine(inputs = argv, raiseOnUsage = true)
+            let mode = results.GetResult(CliArguments.Mode)
+            let path = results.GetResult(CliArguments.Path)
+
+            let previewMode = 
+                if results.Contains(CliArguments.Execute) then 
+                    Domain.Execute 
+                else 
+                    Domain.Preview
+            
+            let scanMode =
+                if results.Contains(CliArguments.Scan_All) then
+                    Domain.ScanAll
+                else
+                    Domain.Optimized
+                    
+            runClean mode path previewMode scanMode
+        with
+        | :? ArguParseException as ex ->
+            Progress.error ex.Message
+            printfn ""
+            printfn "%s" (parser.PrintUsage())
+            1
+        | ex ->
+            Progress.error $"Unexpected error: {ex.Message}"
+            1
