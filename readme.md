@@ -1,10 +1,10 @@
-# Kodi/XBMC Media Directory Cleaner
+# Kodi Media Directory Cleaner
 
-Tool to help keep Kodi/XBMC media directories clean.
+Tool to help keep Kodi media directories clean on Windows 10+.
 
 ## Background
 
-Using [supplemental tools](http://kodi.wiki/view/Library_managers) like [Media Companion](http://kodi.wiki/view/Media_Companion), users can download media meta content (such as artwork and subtitles) and store it locally. Kodi/XBMC won't scrape the internet if the information it needs is present locally alongside the media.
+Using [supplemental tools](https://kodi.wiki/view/Supplemental_tools#Library_managers) like [Media Companion](https://mediacompanion.sourceforge.io/), users can download media meta content (such as artwork and subtitles) and store it locally. Kodi/XBMC won't scrape the internet if the information it needs is present locally alongside the media.
 
 Unfortunately, when media is deleted from within the Kodi/XBMC interface, the local meta files are left behind on the file system. Hence, the need for this tool.
 
@@ -237,6 +237,7 @@ Finding leaf nodes... done
 ## Building
 
 ### Prerequisites
+- Windows 10+
 - .NET 10.0 SDK
 - F# 10.0
 
@@ -261,7 +262,7 @@ dotnet run --project src/DirectoryCleaner.fsproj movies -p "Z:\Movies"
 This tool has evolved through several iterations:
 * 2005 - **Original**: AutoIT script
 * 2015 - **F# 3 rewrite**: First F# implementation
-* 2025 - **F# 10 rewrite**: Enhanced version with modern F# practices and comprehensive test coverage (2025)
+* 2025 - **F# 10 rewrite**: Enhanced version with modern F# practices and comprehensive test coverage
 
 ## License
 
