@@ -62,6 +62,10 @@ let private languagesToDelete = [
     "cat"; "ca"; "catalan"
     "glg"; "gl"; "galician"
     "arm"; "hye"; "hy"; "armenian"
+    "aze"; "az"; "azeri"; "azerbaijani"
+    "khm"; "km"; "khmer"
+    "kaz"; "kk"; "kazakh"
+    "kir"; "ky"; "kyrgyz"
     "geo"; "kat"; "ka"; "georgian"
     // Middle Eastern
     "heb"; "hebrew"
